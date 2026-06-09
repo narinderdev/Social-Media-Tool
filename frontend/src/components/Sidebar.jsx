@@ -1,4 +1,4 @@
-import { History, LayoutDashboard, LogOut } from "lucide-react";
+import { CalendarClock, History, LayoutDashboard, LogOut } from "lucide-react";
 
 import { APP_NAME } from "../constants";
 
@@ -30,6 +30,14 @@ function Sidebar({ route, user, onNavigate, onLogout }) {
           >
             <History size={18} />
             History
+          </button>
+          <button
+            className={route === "scheduled" ? "nav-link active" : "nav-link"}
+            type="button"
+            onClick={() => onNavigate("scheduled")}
+          >
+            <CalendarClock size={18} />
+            Scheduled
           </button>
         </nav>
       </div>

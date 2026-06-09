@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import FRONTEND_ORIGIN
 from app.routes import auth, platforms, posts
+from app.scheduler import start_scheduler, stop_scheduler
 from app.storage import UPLOADS_DIR, ensure_storage
 
 ensure_storage()
@@ -28,3 +29,13 @@ app.include_router(posts.router)
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await stop_scheduler()

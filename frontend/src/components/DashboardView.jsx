@@ -118,9 +118,77 @@ function DashboardView({
           </div>
         </fieldset>
 
+        <fieldset className="schedule-panel">
+          <legend>Publish time</legend>
+          <div className="schedule-options">
+            <label className="schedule-option">
+              <input
+                type="radio"
+                name="publishMode"
+                value="instant"
+                checked={form.publishMode === "instant"}
+                onChange={() =>
+                  setForm((current) => ({
+                    ...current,
+                    publishMode: "instant",
+                    scheduledDate: "",
+                    scheduledTime: ""
+                  }))
+                }
+              />
+              <span>
+                <strong>Post instant</strong>
+                <small>Publish as soon as you submit.</small>
+              </span>
+            </label>
+
+            <label className="schedule-option">
+              <input
+                type="radio"
+                name="publishMode"
+                value="scheduled"
+                checked={form.publishMode === "scheduled"}
+                onChange={() =>
+                  setForm((current) => ({
+                    ...current,
+                    publishMode: "scheduled"
+                  }))
+                }
+              />
+              <span>
+                <strong>Schedule</strong>
+                <small>Pick a future date and time.</small>
+              </span>
+            </label>
+          </div>
+
+          {form.publishMode === "scheduled" && (
+            <div className="schedule-fields">
+            <input
+              className="text-input schedule-input"
+              type="date"
+              value={form.scheduledDate}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, scheduledDate: event.target.value }))
+              }
+              required
+            />
+            <input
+              className="text-input schedule-input"
+              type="time"
+              value={form.scheduledTime}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, scheduledTime: event.target.value }))
+              }
+              required
+            />
+            </div>
+          )}
+        </fieldset>
+
         <button className="submit-button" type="submit" disabled={!canSubmit || submitting}>
           {submitting ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-          Post everywhere
+          {form.publishMode === "scheduled" ? "Schedule post" : "Post everywhere"}
         </button>
       </form>
 

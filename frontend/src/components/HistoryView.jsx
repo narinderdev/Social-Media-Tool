@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 
 import { platformStyles } from "../constants";
-import { mediaTypeForPost } from "../utils";
+import { mediaTypeForPost, publishTypeForPost } from "../utils";
 import PostItem from "./PostItem";
 
 const postMatchesDate = (post, date) => {
@@ -19,7 +19,9 @@ const postMatchesPlatform = (post, platform) => {
   }
 
   return post.results.some(
-    (result) => result.platform === platform && ["dry_run", "published"].includes(result.status)
+    (result) =>
+      result.platform === platform &&
+      ["dry_run", "published", "scheduled", "publishing"].includes(result.status)
   );
 };
 
@@ -44,6 +46,7 @@ function HistoryView({ posts, loading }) {
     date: "",
     platform: "",
     mediaType: "",
+    publishType: "",
     search: ""
   });
 
@@ -54,6 +57,7 @@ function HistoryView({ posts, loading }) {
           postMatchesDate(post, filters.date) &&
           postMatchesPlatform(post, filters.platform) &&
           (!filters.mediaType || mediaTypeForPost(post) === filters.mediaType) &&
+          (!filters.publishType || publishTypeForPost(post) === filters.publishType) &&
           postMatchesSearch(post, filters.search)
       ),
     [posts, filters]
@@ -107,6 +111,15 @@ function HistoryView({ posts, loading }) {
           <option value="photo">Photos</option>
           <option value="video">Videos</option>
           <option value="text">Text only</option>
+        </select>
+        <select
+          className="text-input"
+          value={filters.publishType}
+          onChange={(event) => updateFilter("publishType", event.target.value)}
+        >
+          <option value="">All publish types</option>
+          <option value="instant">Instant</option>
+          <option value="scheduled">Scheduled</option>
         </select>
       </div>
 

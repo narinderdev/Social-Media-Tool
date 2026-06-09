@@ -20,5 +20,8 @@ export const initialForm = {
   caption: "",
   textOnly: false,
   platforms: [],
-  media: null
+  media: null,
+  publishMode: "instant",
+  scheduledDate: "",
+  scheduledTime: ""
 };

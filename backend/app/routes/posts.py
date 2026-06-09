@@ -25,9 +25,18 @@ async def create_post(
     caption: str | None = Form(default=""),
     textOnly: bool = Form(default=False),
     platforms: str | None = Form(default="[]"),
+    scheduleMode: str | None = Form(default="instant"),
+    scheduledAt: str | None = Form(default=""),
     media: UploadFile | None = File(default=None),
 ) -> dict:
-    errors, value = validate_post_payload(caption, textOnly, platforms, media)
+    errors, value = validate_post_payload(
+        caption,
+        textOnly,
+        platforms,
+        media,
+        scheduleMode,
+        scheduledAt,
+    )
     if errors:
         raise HTTPException(status_code=400, detail=errors)
 
@@ -61,15 +70,41 @@ async def create_post(
         "platforms": value["platforms"],
         "textOnly": value["textOnly"],
         "media": media_data,
+        "status": "scheduled" if value["scheduleMode"] == "scheduled" else "publishing",
+        "scheduledAt": value["scheduledAt"],
         "createdAt": datetime.now(UTC).isoformat(),
     }
+
+    if value["scheduleMode"] == "scheduled":
+        scheduled_post = append_post(
+            {
+                **post,
+                "status": "scheduled",
+                "results": [
+                    {
+                        "platform": platform,
+                        "status": "scheduled",
+                        "message": f"Scheduled for {value['scheduledAt']}.",
+                    }
+                    for platform in post["platforms"]
+                ],
+            }
+        )
+        return {"post": scheduled_post}
 
     results = await publish_post(post)
     failed_results = [result for result in results if result["status"] != "published"]
     published_results = [result for result in results if result["status"] == "published"]
     saved_post = None
     if published_results:
-        saved_post = append_post({**post, "results": results})
+        saved_post = append_post(
+            {
+                **post,
+                "status": "partial_failed" if failed_results else "published",
+                "publishedAt": datetime.now(UTC).isoformat(),
+                "results": results,
+            }
+        )
 
     if failed_results and not published_results:
         for media_path in media_paths:

@@ -19,7 +19,15 @@ export const errorMessages = (data) => {
   return Array.isArray(errors) ? errors.map(errorMessage) : [errorMessage(errors)];
 };
 
-export const currentRoute = () => (window.location.pathname === "/posts" ? "posts" : "dashboard");
+export const currentRoute = () => {
+  if (window.location.pathname === "/posts") {
+    return "posts";
+  }
+  if (window.location.pathname === "/scheduled") {
+    return "scheduled";
+  }
+  return "dashboard";
+};
 
 export const mediaTypeForPost = (post) => {
   if (!post.media) {
@@ -27,3 +35,8 @@ export const mediaTypeForPost = (post) => {
   }
   return post.media.mimeType?.startsWith("video/") ? "video" : "photo";
 };
+
+export const publishTypeForPost = (post) => (post.scheduledAt ? "scheduled" : "instant");
+
+export const isUpcomingScheduledPost = (post) =>
+  ["scheduled", "publishing"].includes(post.status);

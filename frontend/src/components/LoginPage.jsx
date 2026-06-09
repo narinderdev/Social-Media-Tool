@@ -3,7 +3,7 @@ import { AlertCircle, Eye, EyeOff, LayoutDashboard, Loader2 } from "lucide-react
 
 import { APP_NAME } from "../constants";
 
-function LoginPage({ onLogin }) {
+function LoginPage({ onLogin, onToast }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +19,7 @@ function LoginPage({ onLogin }) {
       await onLogin({ email, password });
     } catch (loginError) {
       setError(loginError.message);
+      onToast?.(loginError.message, "error");
     } finally {
       setSubmitting(false);
     }

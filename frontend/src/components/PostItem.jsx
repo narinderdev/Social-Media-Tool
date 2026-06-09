@@ -1,8 +1,11 @@
-import { CheckCircle2, FileText, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, FileText, Loader2, Zap, X } from "lucide-react";
 
 import { API_BASE_URL, platformStyles } from "../constants";
+import { publishTypeForPost } from "../utils";
 
 function PostItem({ post }) {
+  const publishType = publishTypeForPost(post);
+
   return (
     <article className="post-item">
       <div className="post-summary">
@@ -19,7 +22,14 @@ function PostItem({ post }) {
         )}
         <div>
           <p>{post.caption || "Media post without caption"}</p>
+          <span className={`publish-type-badge ${publishType}`}>
+            {publishType === "scheduled" ? <CalendarClock size={13} /> : <Zap size={13} />}
+            {publishType === "scheduled" ? "Scheduled" : "Instant"}
+          </span>
           <time>{new Date(post.createdAt).toLocaleString()}</time>
+          {post.status === "scheduled" && post.scheduledAt && (
+            <time>Scheduled: {new Date(post.scheduledAt).toLocaleString()}</time>
+          )}
         </div>
       </div>
 
@@ -30,7 +40,11 @@ function PostItem({ post }) {
             key={result.platform}
             title={result.message}
           >
-            {["dry_run", "published"].includes(result.status) ? (
+            {result.status === "scheduled" ? (
+              <CalendarClock size={14} />
+            ) : result.status === "publishing" ? (
+              <Loader2 className="spin" size={14} />
+            ) : ["dry_run", "published"].includes(result.status) ? (
               <CheckCircle2 size={14} />
             ) : (
               <X size={14} />

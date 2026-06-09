@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from fastapi import UploadFile
@@ -32,10 +33,17 @@ def validate_post_payload(
     text_only: bool,
     platforms: str | None,
     media: UploadFile | None,
+    schedule_mode: str | None = "instant",
+    scheduled_at: str | None = "",
 ) -> tuple[list[str], dict]:
     selected_platforms = list(dict.fromkeys(parse_platforms(platforms)))
     clean_caption = (caption or "").strip()
+    clean_schedule_mode = (schedule_mode or "instant").strip().lower()
+    parsed_scheduled_at = None
     errors = []
+
+    if clean_schedule_mode not in {"instant", "scheduled"}:
+        errors.append("Choose instant post or scheduled post.")
 
     if not selected_platforms:
         errors.append("Select at least one platform.")
@@ -82,8 +90,24 @@ def validate_post_payload(
     ):
         errors.append("Only image and video uploads are supported.")
 
+    if clean_schedule_mode == "scheduled":
+        if not scheduled_at:
+            errors.append("Choose schedule date and time.")
+        else:
+            try:
+                parsed_scheduled_at = datetime.fromisoformat(scheduled_at)
+                if parsed_scheduled_at.tzinfo is None:
+                    parsed_scheduled_at = parsed_scheduled_at.astimezone()
+                parsed_scheduled_at = parsed_scheduled_at.astimezone(UTC)
+                if parsed_scheduled_at <= datetime.now(UTC):
+                    errors.append("Schedule date and time must be in the future.")
+            except ValueError:
+                errors.append("Schedule date and time is invalid.")
+
     return errors, {
         "caption": clean_caption,
         "platforms": selected_platforms,
         "textOnly": text_only,
+        "scheduleMode": clean_schedule_mode,
+        "scheduledAt": parsed_scheduled_at.isoformat() if parsed_scheduled_at else None,
     }

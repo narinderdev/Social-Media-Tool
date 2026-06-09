@@ -33,11 +33,15 @@ def ensure_posts_table() -> None:
                 text_only boolean NOT NULL DEFAULT false,
                 media jsonb,
                 results jsonb NOT NULL,
+                status text NOT NULL DEFAULT 'published',
+                scheduled_at timestamptz,
                 created_at timestamptz NOT NULL,
                 payload jsonb NOT NULL
             )
             """
         )
+        connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'published'")
+        connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at timestamptz")
 
 
 def hash_password(password: str) -> str:
@@ -107,16 +111,20 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 text_only,
                 media,
                 results,
+                status,
+                scheduled_at,
                 created_at,
                 payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s::timestamptz, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::timestamptz, %s::timestamptz, %s)
             ON CONFLICT (id) DO UPDATE SET
                 caption = EXCLUDED.caption,
                 platforms = EXCLUDED.platforms,
                 text_only = EXCLUDED.text_only,
                 media = EXCLUDED.media,
                 results = EXCLUDED.results,
+                status = EXCLUDED.status,
+                scheduled_at = EXCLUDED.scheduled_at,
                 created_at = EXCLUDED.created_at,
                 payload = EXCLUDED.payload
             """,
@@ -127,6 +135,8 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 post["textOnly"],
                 Jsonb(post.get("media")),
                 Jsonb(post["results"]),
+                post.get("status", "published"),
+                post.get("scheduledAt"),
                 post["createdAt"],
                 Jsonb(post),
             ),
@@ -175,3 +185,43 @@ def append_post(post: dict[str, Any]) -> dict[str, Any]:
     posts.insert(0, post)
     POSTS_FILE.write_text(json.dumps(posts, indent=2) + "\n", encoding="utf-8")
     return post
+
+
+def update_post(post: dict[str, Any]) -> dict[str, Any]:
+    if using_database():
+        return append_post_to_database(post)
+
+    posts = read_posts()
+    next_posts = [post if item["id"] == post["id"] else item for item in posts]
+    POSTS_FILE.write_text(json.dumps(next_posts, indent=2) + "\n", encoding="utf-8")
+    return post
+
+
+def read_due_scheduled_posts() -> list[dict[str, Any]]:
+    ensure_storage()
+    if using_database():
+        with db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT payload
+                    FROM posts
+                    WHERE status = 'scheduled'
+                      AND scheduled_at <= now()
+                    ORDER BY scheduled_at ASC
+                    """
+                )
+                return [row[0] for row in cursor.fetchall()]
+
+    now = datetime_now_iso()
+    return [
+        post
+        for post in read_posts()
+        if post.get("status") == "scheduled" and post.get("scheduledAt", "") <= now
+    ]
+
+
+def datetime_now_iso() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).isoformat()
