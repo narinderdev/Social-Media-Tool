@@ -1,52 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  CheckCircle2,
-  FileText,
-  ImagePlus,
-  Loader2,
-  RefreshCw,
-  Send,
-  UploadCloud,
-  X
-} from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
-
-const platformStyles = {
-  instagram: { name: "Instagram", tone: "rose" },
-  facebook: { name: "Facebook", tone: "blue" },
-  linkedin: { name: "LinkedIn", tone: "indigo" },
-  twitter: { name: "X / Twitter", tone: "stone" }
-};
-
-const initialForm = {
-  caption: "",
-  textOnly: false,
-  platforms: [],
-  media: null
-};
-
-const availablePlatformKeys = (platformItems, textOnly = false, hasMedia = false) =>
-  platformItems
-    .filter(
-      (platform) =>
-        platform.configured && !((textOnly || !hasMedia) && platform.key === "instagram")
-    )
-    .map((platform) => platform.key);
-
-const errorMessage = (error) => {
-  if (typeof error === "string") {
-    return error;
-  }
-
-  return error?.description || error?.detail || error?.message || "Could not create post.";
-};
-
-const errorMessages = (data) => {
-  const errors = data.errors || data.detail || ["Could not create post."];
-  return Array.isArray(errors) ? errors.map(errorMessage) : [errorMessage(errors)];
-};
+import { apiFetch, parseJsonResponse } from "./api";
+import ConfirmModal from "./components/ConfirmModal";
+import DashboardView from "./components/DashboardView";
+import HistoryView from "./components/HistoryView";
+import LoadingScreen from "./components/LoadingScreen";
+import LoginPage from "./components/LoginPage";
+import Sidebar from "./components/Sidebar";
+import { APP_NAME, initialForm, platformStyles } from "./constants";
+import { availablePlatformKeys, currentRoute, errorMessages } from "./utils";
 
 function App() {
   const [form, setForm] = useState(initialForm);
@@ -55,7 +18,12 @@ function App() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [errors, setErrors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [authStatus, setAuthStatus] = useState("checking");
+  const [user, setUser] = useState(null);
+  const [route, setRoute] = useState(currentRoute);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [sessionError, setSessionError] = useState("");
 
   const selectedPlatformLabels = useMemo(
     () =>
@@ -66,8 +34,25 @@ function App() {
   );
 
   useEffect(() => {
-    loadDashboard();
+    checkSession();
   }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (authStatus !== "authenticated") {
+        window.history.replaceState({}, "", "/login");
+        return;
+      }
+
+      if (!["/dashboard", "/posts"].includes(window.location.pathname)) {
+        window.history.replaceState({}, "", "/dashboard");
+      }
+      setRoute(currentRoute());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [authStatus]);
 
   useEffect(() => {
     if (!form.media) {
@@ -80,15 +65,57 @@ function App() {
     return () => URL.revokeObjectURL(nextPreviewUrl);
   }, [form.media]);
 
-  const loadDashboard = async () => {
+  const handleUnauthorized = () => {
+    setAuthStatus("anonymous");
+    setUser(null);
+    setPosts([]);
+    setPlatforms([]);
+    setErrors([]);
+    window.history.replaceState({}, "", "/login");
+  };
+
+  const checkSession = async () => {
+    setAuthStatus("checking");
+    setSessionError("");
+    try {
+      const response = await apiFetch("/api/auth/session");
+      const data = await response.json();
+      if (!response.ok || !data.user) {
+        handleUnauthorized();
+        return;
+      }
+
+      setUser(data.user);
+      setAuthStatus("authenticated");
+      if (!["/dashboard", "/posts"].includes(window.location.pathname)) {
+        window.history.replaceState({}, "", "/dashboard");
+      }
+      setRoute(currentRoute());
+      await loadDashboard(true);
+    } catch {
+      setAuthStatus("unavailable");
+      setSessionError("Backend is not reachable. Start the API server first, then retry.");
+    }
+  };
+
+  const loadDashboard = async (sessionConfirmed = false) => {
+    if (!sessionConfirmed && authStatus !== "authenticated") {
+      return;
+    }
+
     setLoading(true);
     setErrors([]);
 
     try {
       const [platformResponse, postsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/platforms`),
-        fetch(`${API_BASE_URL}/api/posts`)
+        apiFetch("/api/platforms"),
+        apiFetch("/api/posts")
       ]);
+
+      if (platformResponse.status === 401 || postsResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       const platformData = await platformResponse.json();
       const postsData = await postsResponse.json();
@@ -117,6 +144,16 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const navigate = (nextRoute) => {
+    const path = nextRoute === "posts" ? "/posts" : "/dashboard";
+    window.history.pushState({}, "", path);
+    setRoute(nextRoute);
+  };
+
+  const upsertPost = (post) => {
+    setPosts((current) => [post, ...current.filter((item) => item.id !== post.id)]);
   };
 
   const updatePlatform = (platform, checked) => {
@@ -155,19 +192,28 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/posts`, {
+      const response = await apiFetch("/api/posts", {
         method: "POST",
         body: payload
       });
-
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       if (!response.ok) {
+        const partialPost = data.post || data.detail?.post;
+        if (partialPost) {
+          upsertPost(partialPost);
+          setForm({ ...initialForm, platforms: availablePlatformKeys(platforms) });
+        }
         setErrors(errorMessages(data));
         return;
       }
 
-      setPosts((current) => [data.post, ...current]);
+      upsertPost(data.post);
       setForm({ ...initialForm, platforms: availablePlatformKeys(platforms) });
     } catch {
       setErrors(["Post request failed. Check that the backend is running."]);
@@ -176,202 +222,107 @@ function App() {
     }
   };
 
+  const login = async (credentials) => {
+    const data = await parseJsonResponse(
+      await apiFetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials)
+      })
+    );
+
+    setUser(data.user);
+    setAuthStatus("authenticated");
+    window.history.replaceState({}, "", "/dashboard");
+    setRoute("dashboard");
+    await loadDashboard(true);
+  };
+
+  const logout = async () => {
+    await apiFetch("/api/auth/logout", { method: "POST" });
+    setShowLogoutModal(false);
+    handleUnauthorized();
+  };
+
   const canSubmit = form.platforms.length > 0 && (form.caption.trim() || form.media);
 
-  return (
-    <main className="app-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">Shared Posts</p>
-          <h1>Composer</h1>
-        </div>
-        <button className="icon-button" type="button" onClick={loadDashboard} aria-label="Refresh">
-          <RefreshCw size={18} />
-        </button>
-      </header>
+  if (authStatus === "checking") {
+    return <LoadingScreen />;
+  }
 
-      {errors.length > 0 && (
-        <section className="alert" aria-live="polite">
-          <AlertCircle size={18} />
+  if (authStatus === "unavailable") {
+    return (
+      <LoadingScreen
+        message="Cannot verify admin session"
+        error={sessionError}
+        onRetry={checkSession}
+      />
+    );
+  }
+
+  if (authStatus !== "authenticated") {
+    return <LoginPage onLogin={login} />;
+  }
+
+  return (
+    <div className="app-layout">
+      <Sidebar
+        route={route}
+        user={user}
+        onNavigate={navigate}
+        onLogout={() => setShowLogoutModal(true)}
+      />
+
+      <main className="app-shell">
+        <header className="top-bar">
           <div>
-            {errors.map((error) => (
-              <p key={error}>{error}</p>
-            ))}
+            <p className="eyebrow">{APP_NAME}</p>
+            <h1>{route === "posts" ? "Post History" : "Composer"}</h1>
           </div>
-        </section>
-      )}
-
-      <section className="workspace">
-        <form className="composer-panel" onSubmit={submitPost}>
-          <div className="panel-heading">
-            <h2>New post</h2>
-            <span>{selectedPlatformLabels || "No platform selected"}</span>
-          </div>
-
-          <label className="field-label" htmlFor="caption">
-            Caption
-          </label>
-          <textarea
-            id="caption"
-            value={form.caption}
-            onChange={(event) => setForm((current) => ({ ...current, caption: event.target.value }))}
-            placeholder="Write text for the post"
-            rows={7}
-          />
-
-          <div className="mode-row">
-            <button
-              className={!form.textOnly ? "mode-button active" : "mode-button"}
-              type="button"
-              onClick={() => updateTextOnly(false)}
-            >
-              <ImagePlus size={17} />
-              Media
-            </button>
-            <button
-              className={form.textOnly ? "mode-button active" : "mode-button"}
-              type="button"
-              onClick={() => updateTextOnly(true)}
-            >
-              <FileText size={17} />
-              Text only
-            </button>
-          </div>
-
-          {!form.textOnly && (
-            <label className="upload-zone">
-              <UploadCloud size={28} />
-              <span>{form.media ? form.media.name : "Choose image or video"}</span>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                onChange={(event) =>
-                  setForm((current) => {
-                    const media = event.target.files?.[0] || null;
-                    const instagramReady = platforms.some(
-                      (platform) => platform.key === "instagram" && platform.configured
-                    );
-                    return {
-                      ...current,
-                      media,
-                      platforms: media
-                        ? [...new Set([...current.platforms, ...(instagramReady ? ["instagram"] : [])])]
-                        : current.platforms.filter((platform) => platform !== "instagram")
-                    };
-                  })
-                }
-              />
-            </label>
-          )}
-
-          <fieldset>
-            <legend>Platforms</legend>
-            <div className="platform-grid">
-              {platforms.map((platform) => {
-                const disabled =
-                  !platform.configured ||
-                  ((form.textOnly || !form.media) && platform.key === "instagram");
-                const selected = form.platforms.includes(platform.key);
-                const style = platformStyles[platform.key] || { name: platform.label, tone: "stone" };
-
-                return (
-                  <label className={`platform-option ${style.tone}`} key={platform.key}>
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      disabled={disabled}
-                      onChange={(event) => updatePlatform(platform.key, event.target.checked)}
-                    />
-                    <span>
-                      <strong>{platform.label}</strong>
-                      <small>{platform.configured ? "Ready" : "Needs keys"}</small>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-
-          <button className="submit-button" type="submit" disabled={!canSubmit || submitting}>
-            {submitting ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-            Post everywhere
+          <button className="icon-button" type="button" onClick={loadDashboard} aria-label="Refresh">
+            <RefreshCw size={18} />
           </button>
-        </form>
+        </header>
 
-        <aside className="preview-panel">
-          <div className="panel-heading">
-            <h2>Preview</h2>
-            <span>{form.textOnly ? "Text" : "Media"}</span>
-          </div>
-
-          {previewUrl ? (
-            form.media?.type.startsWith("video/") ? (
-              <video className="media-preview" src={previewUrl} controls />
-            ) : (
-              <img className="media-preview" src={previewUrl} alt="" />
-            )
-          ) : (
-            <div className="empty-preview">
-              {form.textOnly ? <FileText size={42} /> : <ImagePlus size={42} />}
+        {errors.length > 0 && (
+          <section className="alert" aria-live="polite">
+            <AlertCircle size={18} />
+            <div>
+              {errors.map((error) => (
+                <p key={error}>{error}</p>
+              ))}
             </div>
-          )}
-
-          <p className="preview-caption">{form.caption || "Caption will appear here."}</p>
-        </aside>
-      </section>
-
-      <section className="history">
-        <div className="panel-heading">
-          <h2>Post history</h2>
-          <span>{loading ? "Loading" : `${posts.length} saved`}</span>
-        </div>
-
-        <div className="history-list">
-          {posts.length === 0 && !loading ? (
-            <p className="empty-history">No posts yet.</p>
-          ) : (
-            posts.map((post) => <PostItem key={post.id} post={post} />)
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function PostItem({ post }) {
-  return (
-    <article className="post-item">
-      <div className="post-summary">
-        {post.media ? (
-          post.media.mimeType.startsWith("video/") ? (
-            <video src={`${API_BASE_URL}${post.media.url}`} muted />
-          ) : (
-            <img src={`${API_BASE_URL}${post.media.url}`} alt="" />
-          )
-        ) : (
-          <div className="text-tile">
-            <FileText size={22} />
-          </div>
+          </section>
         )}
-        <div>
-          <p>{post.caption || "Media post without caption"}</p>
-          <time>{new Date(post.createdAt).toLocaleString()}</time>
-        </div>
-      </div>
 
-      <div className="result-row">
-        {post.results.map((result) => (
-          <span className={`result-pill ${result.status}`} key={result.platform}>
-            {["dry_run", "published"].includes(result.status) ? (
-              <CheckCircle2 size={14} />
-            ) : (
-              <X size={14} />
-            )}
-            {platformStyles[result.platform]?.name || result.platform}
-          </span>
-        ))}
-      </div>
-    </article>
+        {route === "posts" ? (
+          <HistoryView posts={posts} loading={loading} />
+        ) : (
+          <DashboardView
+            form={form}
+            platforms={platforms}
+            previewUrl={previewUrl}
+            selectedPlatformLabels={selectedPlatformLabels}
+            canSubmit={canSubmit}
+            submitting={submitting}
+            setForm={setForm}
+            updateTextOnly={updateTextOnly}
+            updatePlatform={updatePlatform}
+            submitPost={submitPost}
+          />
+        )}
+      </main>
+
+      {showLogoutModal && (
+        <ConfirmModal
+          title="Log out?"
+          message="Are you sure you want to end this admin session?"
+          confirmLabel="Logout"
+          onCancel={() => setShowLogoutModal(false)}
+          onConfirm={logout}
+        />
+      )}
+    </div>
   );
 }
 

@@ -1,8 +1,10 @@
+import hashlib
 import json
+import secrets
 from pathlib import Path
 from typing import Any
 
-from app.config import DATABASE_URL
+from app.config import ADMIN_PASSWORD, ADMIN_USER, DATABASE_URL
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -35,6 +37,60 @@ def ensure_posts_table() -> None:
                 payload jsonb NOT NULL
             )
             """
+        )
+
+
+def hash_password(password: str) -> str:
+    iterations = 260000
+    salt = secrets.token_hex(16)
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt}${password_hash}"
+
+
+def ensure_auth_tables() -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id bigserial PRIMARY KEY,
+                email text UNIQUE NOT NULL,
+                password_hash text NOT NULL,
+                role text NOT NULL DEFAULT 'admin',
+                created_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sessions (
+                token text PRIMARY KEY,
+                user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                expires_at timestamptz NOT NULL
+            )
+            """
+        )
+
+
+def seed_admin_user() -> None:
+    if not ADMIN_USER or not ADMIN_PASSWORD:
+        return
+
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO users (email, password_hash, role)
+            VALUES (%s, %s, 'admin')
+            ON CONFLICT (email) DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                role = 'admin'
+            """,
+            (ADMIN_USER, hash_password(ADMIN_PASSWORD)),
         )
 
 
@@ -91,6 +147,8 @@ def ensure_storage() -> None:
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     if using_database():
         ensure_posts_table()
+        ensure_auth_tables()
+        seed_admin_user()
         migrate_json_posts_to_database()
         return
 

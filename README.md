@@ -1,4 +1,4 @@
-# Shared Posts
+# Social Media Tool
 
 One local dashboard to compose a post once and send it to Instagram, Facebook, LinkedIn, and X / Twitter.
 
@@ -40,6 +40,11 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+After login:
+
+- `http://localhost:5173/dashboard`: compose and publish posts.
+- `http://localhost:5173/posts`: view saved post history from PostgreSQL.
+
 ## API Keys Later
 
 Backend env keys in `backend/.env`:
@@ -50,6 +55,8 @@ BACKEND_HOST=127.0.0.1
 FRONTEND_ORIGIN=http://localhost:5173
 PUBLIC_API_BASE_URL=http://localhost:4000
 DATABASE_URL=postgresql://apnitormacmini3@localhost:5432/shared_posts_db
+ADMIN_USER=hr@apnitor.com
+ADMIN_PASSWORD=Apnitor@1
 SOCIAL_DRY_RUN=true
 META_GRAPH_API_VERSION=v24.0
 
