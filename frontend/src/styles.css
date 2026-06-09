@@ -205,6 +205,47 @@ h2 {
   margin-top: 4px;
 }
 
+.account-switcher {
+  display: grid;
+  gap: 8px;
+  margin: -8px 0 18px;
+  padding: 14px;
+  border: 1px solid #e1dacf;
+  border-radius: 8px;
+  background: #fffdfa;
+  box-shadow: 0 10px 30px rgba(68, 55, 38, 0.06);
+}
+
+.account-switcher label {
+  color: #7b858f;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.account-switcher div {
+  width: fit-content;
+  min-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #eadfcd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #8d5a14;
+  background: #fffaf3;
+}
+
+.account-switcher select {
+  min-width: 150px;
+  border: 0;
+  outline: 0;
+  color: #5c421b;
+  background: transparent;
+  font-weight: 750;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
@@ -603,6 +644,18 @@ fieldset {
 .publish-type-badge.scheduled {
   color: #3f4fa8;
   background: #e8ebff;
+}
+
+.account-badge {
+  width: fit-content;
+  display: inline-flex;
+  margin: 6px 0 0 6px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #2d5a53;
+  background: #e7f2ef;
+  font-size: 0.74rem;
+  font-weight: 750;
 }
 
 time {

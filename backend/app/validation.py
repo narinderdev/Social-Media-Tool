@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from fastapi import UploadFile
 
 from app.config import PLATFORMS, PUBLIC_API_BASE_URL, SOCIAL_DRY_RUN, missing_required_env
+from app.config import default_social_account, is_supported_account, key_from_label
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 
@@ -35,15 +36,20 @@ def validate_post_payload(
     media: UploadFile | None,
     schedule_mode: str | None = "instant",
     scheduled_at: str | None = "",
+    account: str | None = "",
 ) -> tuple[list[str], dict]:
     selected_platforms = list(dict.fromkeys(parse_platforms(platforms)))
     clean_caption = (caption or "").strip()
     clean_schedule_mode = (schedule_mode or "instant").strip().lower()
+    selected_account = key_from_label(account or default_social_account())
     parsed_scheduled_at = None
     errors = []
 
     if clean_schedule_mode not in {"instant", "scheduled"}:
         errors.append("Choose instant post or scheduled post.")
+
+    if not is_supported_account(selected_account):
+        errors.append("Choose a supported social account.")
 
     if not selected_platforms:
         errors.append("Select at least one platform.")
@@ -59,7 +65,7 @@ def validate_post_payload(
         )
     elif supported_platforms:
         for platform in supported_platforms:
-            missing_env = missing_required_env(platform)
+            missing_env = missing_required_env(platform, selected_account)
             if missing_env:
                 errors.append(
                     f"{PLATFORMS[platform].label} needs keys: {', '.join(missing_env)}."
@@ -110,4 +116,5 @@ def validate_post_payload(
         "textOnly": text_only,
         "scheduleMode": clean_schedule_mode,
         "scheduledAt": parsed_scheduled_at.isoformat() if parsed_scheduled_at else None,
+        "account": selected_account,
     }

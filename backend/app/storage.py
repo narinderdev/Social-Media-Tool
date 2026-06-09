@@ -30,6 +30,8 @@ def ensure_posts_table() -> None:
                 id text PRIMARY KEY,
                 caption text NOT NULL DEFAULT '',
                 platforms jsonb NOT NULL,
+                account text NOT NULL DEFAULT 'glowante',
+                account_label text NOT NULL DEFAULT 'Glowante',
                 text_only boolean NOT NULL DEFAULT false,
                 media jsonb,
                 results jsonb NOT NULL,
@@ -42,6 +44,16 @@ def ensure_posts_table() -> None:
         )
         connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'published'")
         connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at timestamptz")
+        connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS account text NOT NULL DEFAULT 'glowante'")
+        connection.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS account_label text NOT NULL DEFAULT 'Glowante'")
+        connection.execute(
+            """
+            UPDATE posts
+            SET
+                account = COALESCE(NULLIF(payload->>'account', ''), account, 'glowante'),
+                account_label = COALESCE(NULLIF(payload->>'accountLabel', ''), account_label, 'Glowante')
+            """
+        )
 
 
 def hash_password(password: str) -> str:
@@ -108,6 +120,8 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 id,
                 caption,
                 platforms,
+                account,
+                account_label,
                 text_only,
                 media,
                 results,
@@ -116,10 +130,12 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 created_at,
                 payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::timestamptz, %s::timestamptz, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::timestamptz, %s::timestamptz, %s)
             ON CONFLICT (id) DO UPDATE SET
                 caption = EXCLUDED.caption,
                 platforms = EXCLUDED.platforms,
+                account = EXCLUDED.account,
+                account_label = EXCLUDED.account_label,
                 text_only = EXCLUDED.text_only,
                 media = EXCLUDED.media,
                 results = EXCLUDED.results,
@@ -132,6 +148,8 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 post["id"],
                 post["caption"],
                 Jsonb(post["platforms"]),
+                post.get("account", "glowante"),
+                post.get("accountLabel", "Glowante"),
                 post["textOnly"],
                 Jsonb(post.get("media")),
                 Jsonb(post["results"]),

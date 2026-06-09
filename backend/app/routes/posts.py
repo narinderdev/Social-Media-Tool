@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.auth import require_user
+from app.config import social_account_label
 from app.media import create_instagram_image
 from app.social.publisher import publish_post
 from app.storage import UPLOADS_DIR, append_post, read_posts
@@ -27,6 +28,7 @@ async def create_post(
     platforms: str | None = Form(default="[]"),
     scheduleMode: str | None = Form(default="instant"),
     scheduledAt: str | None = Form(default=""),
+    account: str | None = Form(default=""),
     media: UploadFile | None = File(default=None),
 ) -> dict:
     errors, value = validate_post_payload(
@@ -36,6 +38,7 @@ async def create_post(
         media,
         scheduleMode,
         scheduledAt,
+        account,
     )
     if errors:
         raise HTTPException(status_code=400, detail=errors)
@@ -68,6 +71,8 @@ async def create_post(
         "id": str(uuid4()),
         "caption": value["caption"],
         "platforms": value["platforms"],
+        "account": value["account"],
+        "accountLabel": social_account_label(value["account"]),
         "textOnly": value["textOnly"],
         "media": media_data,
         "status": "scheduled" if value["scheduleMode"] == "scheduled" else "publishing",

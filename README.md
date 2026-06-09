@@ -44,6 +44,7 @@ After login:
 
 - `http://localhost:5173/dashboard`: compose and publish posts.
 - `http://localhost:5173/posts`: view saved post history from PostgreSQL.
+- `http://localhost:5173/scheduled`: view upcoming scheduled posts.
 
 ## API Keys Later
 
@@ -79,7 +80,7 @@ TWITTER_BEARER_TOKEN=
 Frontend env key in `frontend/.env`:
 
 ```bash
-VITE_API_BASE_URL=http://127.0.0.1:4000
+VITE_API_BASE_URL=http://localhost:4000
 ```
 
 Credential notes:
@@ -95,15 +96,43 @@ When keys are ready, set:
 SOCIAL_DRY_RUN=false
 ```
 
-Then implement the live calls inside:
+### Multiple Brand Accounts
+
+Use account profiles when the same dashboard must post for more than one brand, for example
+`Glowante` and `Apnitor`.
+
+Existing unprefixed credentials are used for the default account, so your current `backend/.env`
+can keep working for Glowante:
 
 ```bash
-backend/app/social/adapters.py
+SOCIAL_ACCOUNTS=glowante,apnitor
+DEFAULT_SOCIAL_ACCOUNT=glowante
+SOCIAL_ACCOUNT_GLOWANTE_LABEL=Glowante
+SOCIAL_ACCOUNT_APNITOR_LABEL=Apnitor
 ```
+
+Add Apnitor credentials with this prefix pattern:
+
+```bash
+SOCIAL_ACCOUNT_APNITOR_INSTAGRAM_ACCOUNT_ID=
+SOCIAL_ACCOUNT_APNITOR_INSTAGRAM_ACCESS_TOKEN=
+SOCIAL_ACCOUNT_APNITOR_FACEBOOK_PAGE_ID=
+SOCIAL_ACCOUNT_APNITOR_FACEBOOK_PAGE_ACCESS_TOKEN=
+SOCIAL_ACCOUNT_APNITOR_LINKEDIN_ACCESS_TOKEN=
+SOCIAL_ACCOUNT_APNITOR_LINKEDIN_AUTHOR_URN=
+SOCIAL_ACCOUNT_APNITOR_TWITTER_API_KEY=
+SOCIAL_ACCOUNT_APNITOR_TWITTER_API_SECRET=
+SOCIAL_ACCOUNT_APNITOR_TWITTER_ACCESS_TOKEN=
+SOCIAL_ACCOUNT_APNITOR_TWITTER_ACCESS_TOKEN_SECRET=
+```
+
+The frontend shows a top-level `Select account` control on Posts, History, and Scheduled. The
+selected account filters history/scheduled posts and is used by all four platform adapters.
 
 ## Current API
 
 - `GET /api/health`: API status.
+- `GET /api/accounts`: configured social account profiles and per-platform readiness.
 - `GET /api/platforms`: platform readiness and missing env vars.
 - `GET /api/posts`: saved local post history.
 - `POST /api/posts`: multipart post creation with optional `media`, `caption`, `textOnly`, and selected `platforms`.

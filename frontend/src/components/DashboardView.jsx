@@ -4,7 +4,7 @@ import { fallbackPlatforms, platformStyles } from "../constants";
 
 function DashboardView({
   form,
-  platforms,
+  activePlatforms,
   previewUrl,
   selectedPlatformLabels,
   canSubmit,
@@ -14,7 +14,7 @@ function DashboardView({
   updatePlatform,
   submitPost
 }) {
-  const visiblePlatforms = platforms.length > 0 ? platforms : fallbackPlatforms;
+  const visiblePlatforms = activePlatforms.length > 0 ? activePlatforms : fallbackPlatforms;
   const removeMedia = () => {
     setForm((current) => ({
       ...current,
@@ -72,7 +72,7 @@ function DashboardView({
               onChange={(event) =>
                 setForm((current) => {
                   const media = event.target.files?.[0] || null;
-                  const instagramReady = platforms.some(
+                  const instagramReady = activePlatforms.some(
                     (platform) => platform.key === "instagram" && platform.configured
                   );
                   return {
@@ -164,24 +164,24 @@ function DashboardView({
 
           {form.publishMode === "scheduled" && (
             <div className="schedule-fields">
-            <input
-              className="text-input schedule-input"
-              type="date"
-              value={form.scheduledDate}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, scheduledDate: event.target.value }))
-              }
-              required
-            />
-            <input
-              className="text-input schedule-input"
-              type="time"
-              value={form.scheduledTime}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, scheduledTime: event.target.value }))
-              }
-              required
-            />
+              <input
+                className="text-input schedule-input"
+                type="date"
+                value={form.scheduledDate}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, scheduledDate: event.target.value }))
+                }
+                required
+              />
+              <input
+                className="text-input schedule-input"
+                type="time"
+                value={form.scheduledTime}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, scheduledTime: event.target.value }))
+                }
+                required
+              />
             </div>
           )}
         </fieldset>

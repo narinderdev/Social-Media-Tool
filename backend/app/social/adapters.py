@@ -20,6 +20,8 @@ from app.config import (
     PLATFORMS,
     PUBLIC_API_BASE_URL,
     SOCIAL_DRY_RUN,
+    account_env,
+    social_account_label,
     missing_required_env,
 )
 from app.storage import UPLOADS_DIR
@@ -29,6 +31,10 @@ LINKEDIN_API_BASE_URL = "https://api.linkedin.com/rest"
 TWITTER_API_BASE_URL = "https://api.x.com"
 TWITTER_UPLOAD_BASE_URL = "https://upload.twitter.com"
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+
+
+def credential(post: dict[str, Any], env_name: str) -> str | None:
+    return account_env(post.get("account"), env_name)
 
 
 def media_url_for(post: dict[str, Any], platform: str | None = None) -> str | None:
@@ -185,9 +191,9 @@ async def get_graph(path: str, fields: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(graph_get, path, fields)
 
 
-def linkedin_headers(content_type: str | None = "application/json") -> dict[str, str]:
+def linkedin_headers(post: dict[str, Any], content_type: str | None = "application/json") -> dict[str, str]:
     headers = {
-        "Authorization": f"Bearer {getenv('LINKEDIN_ACCESS_TOKEN')}",
+        "Authorization": f"Bearer {credential(post, 'LINKEDIN_ACCESS_TOKEN')}",
         "Linkedin-Version": LINKEDIN_API_VERSION,
         "X-Restli-Protocol-Version": "2.0.0",
     }
@@ -196,18 +202,20 @@ def linkedin_headers(content_type: str | None = "application/json") -> dict[str,
     return headers
 
 
-def linkedin_upload_headers(content_type: str | None) -> dict[str, str]:
+def linkedin_upload_headers(post: dict[str, Any], content_type: str | None) -> dict[str, str]:
     return {
-        "Authorization": f"Bearer {getenv('LINKEDIN_ACCESS_TOKEN')}",
+        "Authorization": f"Bearer {credential(post, 'LINKEDIN_ACCESS_TOKEN')}",
         "Content-Type": content_type or "application/octet-stream",
     }
 
 
-def linkedin_post_json(path: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+def linkedin_post_json(
+    post: dict[str, Any], path: str, payload: dict[str, Any]
+) -> tuple[dict[str, Any], Any]:
     request = Request(
         f"{LINKEDIN_API_BASE_URL}{path}",
         data=json.dumps(payload).encode("utf-8"),
-        headers=linkedin_headers(),
+        headers=linkedin_headers(post),
         method="POST",
     )
 
@@ -218,6 +226,7 @@ def linkedin_post_json(path: str, payload: dict[str, Any]) -> tuple[dict[str, An
 
 
 def linkedin_put_file(
+    post: dict[str, Any],
     upload_url: str,
     file_path: Path,
     content_type: str | None,
@@ -231,7 +240,7 @@ def linkedin_put_file(
     request = Request(
         upload_url,
         data=data,
-        headers=linkedin_upload_headers(content_type),
+        headers=linkedin_upload_headers(post, content_type),
         method="PUT",
     )
 
@@ -240,11 +249,14 @@ def linkedin_put_file(
         return response.headers.get("etag", "").strip('"')
 
 
-async def post_linkedin_json(path: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-    return await asyncio.to_thread(linkedin_post_json, path, payload)
+async def post_linkedin_json(
+    post: dict[str, Any], path: str, payload: dict[str, Any]
+) -> tuple[dict[str, Any], Any]:
+    return await asyncio.to_thread(linkedin_post_json, post, path, payload)
 
 
 async def put_linkedin_file(
+    post: dict[str, Any],
     upload_url: str,
     file_path: Path,
     content_type: str | None,
@@ -253,6 +265,7 @@ async def put_linkedin_file(
 ) -> str:
     return await asyncio.to_thread(
         linkedin_put_file,
+        post,
         upload_url,
         file_path,
         content_type,
@@ -263,7 +276,7 @@ async def put_linkedin_file(
 
 def linkedin_post_payload(post: dict[str, Any], media_id: str | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "author": getenv("LINKEDIN_AUTHOR_URN"),
+        "author": credential(post, "LINKEDIN_AUTHOR_URN"),
         "commentary": post["caption"] or " ",
         "visibility": "PUBLIC",
         "distribution": {
@@ -302,14 +315,15 @@ def twitter_percent_encode(value: Any) -> str:
 def twitter_oauth_header(
     method: str,
     url: str,
+    post: dict[str, Any],
     request_params: dict[str, Any] | None = None,
 ) -> str:
     oauth_params = {
-        "oauth_consumer_key": getenv("TWITTER_API_KEY"),
+        "oauth_consumer_key": credential(post, "TWITTER_API_KEY"),
         "oauth_nonce": secrets.token_hex(16),
         "oauth_signature_method": "HMAC-SHA1",
         "oauth_timestamp": str(int(time.time())),
-        "oauth_token": getenv("TWITTER_ACCESS_TOKEN"),
+        "oauth_token": credential(post, "TWITTER_ACCESS_TOKEN"),
         "oauth_version": "1.0",
     }
     signature_params = {
@@ -329,8 +343,8 @@ def twitter_oauth_header(
     )
     signing_key = "&".join(
         [
-            twitter_percent_encode(getenv("TWITTER_API_SECRET")),
-            twitter_percent_encode(getenv("TWITTER_ACCESS_TOKEN_SECRET")),
+            twitter_percent_encode(credential(post, "TWITTER_API_SECRET")),
+            twitter_percent_encode(credential(post, "TWITTER_ACCESS_TOKEN_SECRET")),
         ]
     )
     signature = base64.b64encode(
@@ -348,13 +362,13 @@ def twitter_oauth_header(
     )
 
 
-def twitter_post_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+def twitter_post_json(post: dict[str, Any], path: str, payload: dict[str, Any]) -> dict[str, Any]:
     url = f"{TWITTER_API_BASE_URL}{path}"
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": twitter_oauth_header("POST", url),
+            "Authorization": twitter_oauth_header("POST", url, post),
             "Content-Type": "application/json",
         },
         method="POST",
@@ -364,7 +378,9 @@ def twitter_post_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def twitter_upload_image(file_path: Path, content_type: str | None) -> dict[str, Any]:
+def twitter_upload_image(
+    post: dict[str, Any], file_path: Path, content_type: str | None
+) -> dict[str, Any]:
     url = f"{TWITTER_UPLOAD_BASE_URL}/1.1/media/upload.json"
     boundary = f"shared-posts-{uuid4().hex}"
     body = bytearray()
@@ -385,7 +401,7 @@ def twitter_upload_image(file_path: Path, content_type: str | None) -> dict[str,
         url,
         data=bytes(body),
         headers={
-            "Authorization": twitter_oauth_header("POST", url),
+            "Authorization": twitter_oauth_header("POST", url, post),
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         },
         method="POST",
@@ -395,22 +411,27 @@ def twitter_upload_image(file_path: Path, content_type: str | None) -> dict[str,
         return json.loads(response.read().decode("utf-8"))
 
 
-async def post_twitter_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return await asyncio.to_thread(twitter_post_json, path, payload)
+async def post_twitter_json(post: dict[str, Any], path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(twitter_post_json, post, path, payload)
 
 
-async def upload_twitter_image(file_path: Path, content_type: str | None) -> dict[str, Any]:
-    return await asyncio.to_thread(twitter_upload_image, file_path, content_type)
+async def upload_twitter_image(
+    post: dict[str, Any], file_path: Path, content_type: str | None
+) -> dict[str, Any]:
+    return await asyncio.to_thread(twitter_upload_image, post, file_path, content_type)
 
 
-def missing_credentials_result(platform: str) -> dict[str, Any]:
+def missing_credentials_result(platform: str, post: dict[str, Any]) -> dict[str, Any]:
     platform_config = PLATFORMS[platform]
-    missing_env = missing_required_env(platform)
+    missing_env = missing_required_env(platform, post.get("account"))
 
     return {
         "platform": platform,
         "status": "needs_credentials",
-        "message": f"Missing required environment variables: {', '.join(missing_env)}",
+        "message": (
+            f"{platform_config.label} is missing keys for "
+            f"{social_account_label(post.get('account') or '')}: {', '.join(missing_env)}"
+        ),
     }
 
 
@@ -430,9 +451,9 @@ def blocked_result(platform: str, post: dict[str, Any]) -> dict[str, Any] | None
     if SOCIAL_DRY_RUN:
         return dry_run_result(platform, post)
 
-    missing_env = missing_required_env(platform)
+    missing_env = missing_required_env(platform, post.get("account"))
     if missing_env:
-        return missing_credentials_result(platform)
+        return missing_credentials_result(platform, post)
 
     return None
 
@@ -454,7 +475,7 @@ async def publish_to_instagram(post: dict[str, Any]) -> dict[str, Any]:
     try:
         container_payload = {
             "caption": post["caption"],
-            "access_token": getenv("INSTAGRAM_ACCESS_TOKEN"),
+            "access_token": credential(post, "INSTAGRAM_ACCESS_TOKEN"),
         }
         if media["mimeType"].startswith("video/"):
             container_payload.update(
@@ -467,7 +488,8 @@ async def publish_to_instagram(post: dict[str, Any]) -> dict[str, Any]:
         else:
             container_payload["image_url"] = media_url
 
-        container = await post_form(f"/{getenv('INSTAGRAM_ACCOUNT_ID')}/media", container_payload)
+        instagram_account_id = credential(post, "INSTAGRAM_ACCOUNT_ID")
+        container = await post_form(f"/{instagram_account_id}/media", container_payload)
         if media["mimeType"].startswith("video/"):
             video_ready = False
             for _ in range(20):
@@ -475,7 +497,7 @@ async def publish_to_instagram(post: dict[str, Any]) -> dict[str, Any]:
                     f"/{container['id']}",
                     {
                         "fields": "status_code",
-                        "access_token": getenv("INSTAGRAM_ACCESS_TOKEN"),
+                        "access_token": credential(post, "INSTAGRAM_ACCESS_TOKEN"),
                     },
                 )
                 if status.get("status_code") == "FINISHED":
@@ -496,10 +518,10 @@ async def publish_to_instagram(post: dict[str, Any]) -> dict[str, Any]:
                 }
 
         published = await post_form(
-            f"/{getenv('INSTAGRAM_ACCOUNT_ID')}/media_publish",
+            f"/{instagram_account_id}/media_publish",
             {
                 "creation_id": container["id"],
-                "access_token": getenv("INSTAGRAM_ACCESS_TOKEN"),
+                "access_token": credential(post, "INSTAGRAM_ACCESS_TOKEN"),
             },
         )
     except (HTTPError, URLError, KeyError, TimeoutError) as error:
@@ -522,8 +544,8 @@ async def publish_to_facebook(post: dict[str, Any]) -> dict[str, Any]:
     if blocked:
         return blocked
 
-    page_id = getenv("FACEBOOK_PAGE_ID")
-    page_token = getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+    page_id = credential(post, "FACEBOOK_PAGE_ID")
+    page_token = credential(post, "FACEBOOK_PAGE_ACCESS_TOKEN")
     media = post.get("media")
 
     try:
@@ -608,10 +630,11 @@ async def publish_to_linkedin(post: dict[str, Any]) -> dict[str, Any]:
 
             if media["mimeType"].startswith("video/"):
                 initialized, _ = await post_linkedin_json(
+                    post,
                     "/videos?action=initializeUpload",
                     {
                         "initializeUploadRequest": {
-                            "owner": getenv("LINKEDIN_AUTHOR_URN"),
+                            "owner": credential(post, "LINKEDIN_AUTHOR_URN"),
                             "fileSizeBytes": media_path.stat().st_size,
                             "uploadCaptions": False,
                             "uploadThumbnail": False,
@@ -622,6 +645,7 @@ async def publish_to_linkedin(post: dict[str, Any]) -> dict[str, Any]:
                 uploaded_part_ids = []
                 for instruction in upload["uploadInstructions"]:
                     etag = await put_linkedin_file(
+                        post,
                         instruction["uploadUrl"],
                         media_path,
                         "application/octet-stream",
@@ -632,6 +656,7 @@ async def publish_to_linkedin(post: dict[str, Any]) -> dict[str, Any]:
                         uploaded_part_ids.append(etag)
 
                 await post_linkedin_json(
+                    post,
                     "/videos?action=finalizeUpload",
                     {
                         "finalizeUploadRequest": {
@@ -644,19 +669,20 @@ async def publish_to_linkedin(post: dict[str, Any]) -> dict[str, Any]:
                 post_payload = linkedin_video_post_payload(post, upload["video"])
             else:
                 initialized, _ = await post_linkedin_json(
+                    post,
                     "/images?action=initializeUpload",
                     {
                         "initializeUploadRequest": {
-                            "owner": getenv("LINKEDIN_AUTHOR_URN"),
+                            "owner": credential(post, "LINKEDIN_AUTHOR_URN"),
                         }
                     },
                 )
                 upload = initialized["value"]
-                await put_linkedin_file(upload["uploadUrl"], media_path, media["mimeType"])
+                await put_linkedin_file(post, upload["uploadUrl"], media_path, media["mimeType"])
                 media_id = upload["image"]
                 post_payload = linkedin_post_payload(post, media_id)
 
-        _, headers = await post_linkedin_json("/posts", post_payload)
+        _, headers = await post_linkedin_json(post, "/posts", post_payload)
     except (HTTPError, URLError, KeyError, TimeoutError) as error:
         return {
             "platform": "linkedin",
@@ -700,12 +726,12 @@ async def publish_to_twitter(post: dict[str, Any]) -> dict[str, Any]:
                     "message": "Uploaded media file is missing.",
                 }
 
-            uploaded = await upload_twitter_image(media_path, media["mimeType"])
+            uploaded = await upload_twitter_image(post, media_path, media["mimeType"])
             payload["media"] = {
                 "media_ids": [uploaded.get("media_id_string") or str(uploaded["media_id"])],
             }
 
-        published = await post_twitter_json("/2/tweets", payload)
+        published = await post_twitter_json(post, "/2/tweets", payload)
     except (HTTPError, URLError, KeyError, TimeoutError) as error:
         return {
             "platform": "twitter",

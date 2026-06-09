@@ -50,7 +50,7 @@ function LoginPage({ onLogin, onToast }) {
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="hr@apnitor.com"
+          placeholder="Enter admin email"
           autoComplete="username"
           required
         />

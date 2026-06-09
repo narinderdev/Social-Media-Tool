@@ -23,5 +23,6 @@ export const initialForm = {
   media: null,
   publishMode: "instant",
   scheduledDate: "",
-  scheduledTime: ""
+  scheduledTime: "",
+  selectedAccount: ""
 };

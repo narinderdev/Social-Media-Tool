@@ -3,6 +3,15 @@ import { CalendarClock, CheckCircle2, FileText, Loader2, Zap, X } from "lucide-r
 import { API_BASE_URL, platformStyles } from "../constants";
 import { publishTypeForPost } from "../utils";
 
+const accountLabelForPost = (post) =>
+  post.accountLabel ||
+  (post.account
+    ? post.account
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
+    : "Default account");
+
 function PostItem({ post }) {
   const publishType = publishTypeForPost(post);
 
@@ -26,6 +35,7 @@ function PostItem({ post }) {
             {publishType === "scheduled" ? <CalendarClock size={13} /> : <Zap size={13} />}
             {publishType === "scheduled" ? "Scheduled" : "Instant"}
           </span>
+          <span className="account-badge">{accountLabelForPost(post)}</span>
           <time>{new Date(post.createdAt).toLocaleString()}</time>
           {post.status === "scheduled" && post.scheduledAt && (
             <time>Scheduled: {new Date(post.scheduledAt).toLocaleString()}</time>

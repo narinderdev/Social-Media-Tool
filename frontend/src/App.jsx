@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
 import { apiFetch, parseJsonResponse } from "./api";
+import AccountSelector from "./components/AccountSelector";
 import ConfirmModal from "./components/ConfirmModal";
 import DashboardView from "./components/DashboardView";
 import HistoryView from "./components/HistoryView";
@@ -20,7 +21,7 @@ import {
 
 function App() {
   const [form, setForm] = useState(initialForm);
-  const [platforms, setPlatforms] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [posts, setPosts] = useState([]);
   const [previewUrl, setPreviewUrl] = useState("");
   const [errors, setErrors] = useState([]);
@@ -39,6 +40,18 @@ function App() {
         .map((platform) => platformStyles[platform]?.name || platform)
         .join(", "),
     [form.platforms]
+  );
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.key === form.selectedAccount),
+    [accounts, form.selectedAccount]
+  );
+  const activePlatforms = selectedAccount?.platforms || [];
+  const accountMissingKeys = useMemo(
+    () =>
+      activePlatforms
+        .filter((platform) => !platform.configured)
+        .map((platform) => `${platform.label}: ${platform.missingEnv.join(", ")}`),
+    [activePlatforms]
   );
 
   useEffect(() => {
@@ -77,7 +90,7 @@ function App() {
     setAuthStatus("anonymous");
     setUser(null);
     setPosts([]);
-    setPlatforms([]);
+    setAccounts([]);
     setErrors([]);
     window.history.replaceState({}, "", "/login");
   };
@@ -126,7 +139,7 @@ function App() {
 
     try {
       const [platformResponse, postsResponse] = await Promise.all([
-        apiFetch("/api/platforms"),
+        apiFetch("/api/accounts"),
         apiFetch("/api/posts")
       ]);
 
@@ -135,27 +148,33 @@ function App() {
         return;
       }
 
-      const platformData = await platformResponse.json();
+      const accountData = await platformResponse.json();
       const postsData = await postsResponse.json();
+      const nextAccounts = accountData.accounts || [];
 
-      setPlatforms(platformData.platforms || []);
+      setAccounts(nextAccounts);
       setPosts(postsData.posts || []);
       setForm((current) => ({
         ...current,
-        platforms:
-          current.platforms.length > 0
-            ? current.platforms.filter((platform) =>
-                availablePlatformKeys(
-                  platformData.platforms || [],
-                  current.textOnly,
-                  Boolean(current.media)
-                ).includes(platform)
-              )
-            : availablePlatformKeys(
-                platformData.platforms || [],
-                current.textOnly,
-                Boolean(current.media)
-              )
+        ...(() => {
+          const nextAccount =
+            nextAccounts.find((account) => account.key === current.selectedAccount) ||
+            nextAccounts.find((account) => account.key === accountData.defaultAccount) ||
+            nextAccounts[0];
+          const nextPlatforms = nextAccount?.platforms || [];
+          const availablePlatforms = availablePlatformKeys(
+            nextPlatforms,
+            current.textOnly,
+            Boolean(current.media)
+          );
+          return {
+            selectedAccount: nextAccount?.key || "",
+            platforms:
+              current.platforms.length > 0
+                ? current.platforms.filter((platform) => availablePlatforms.includes(platform))
+                : availablePlatforms
+          };
+        })()
       }));
       if (options.toastMessage) {
         showToast(options.toastMessage, "success");
@@ -189,6 +208,17 @@ function App() {
     if (nextRoute === "scheduled") {
       loadDashboard(false, { toastMessage: "Scheduled posts fetched." });
     }
+  };
+
+  const changeAccount = (accountKey) => {
+    const nextAccount = accounts.find((account) => account.key === accountKey);
+    const nextPlatforms = nextAccount?.platforms || [];
+    setForm((current) => ({
+      ...current,
+      selectedAccount: accountKey,
+      platforms: availablePlatformKeys(nextPlatforms, current.textOnly, Boolean(current.media))
+    }));
+    setErrors([]);
   };
 
   const upsertPost = (post) => {
@@ -225,6 +255,7 @@ function App() {
     payload.append("caption", form.caption);
     payload.append("textOnly", String(form.textOnly));
     payload.append("platforms", JSON.stringify(form.platforms));
+    payload.append("account", form.selectedAccount);
     payload.append("scheduleMode", form.publishMode);
     payload.append(
       "scheduledAt",
@@ -251,7 +282,11 @@ function App() {
         const partialPost = data.post || data.detail?.post;
         if (partialPost) {
           upsertPost(partialPost);
-          setForm({ ...initialForm, platforms: availablePlatformKeys(platforms) });
+          setForm({
+            ...initialForm,
+            selectedAccount: form.selectedAccount,
+            platforms: availablePlatformKeys(activePlatforms)
+          });
         }
         const nextErrors = errorMessages(data);
         setErrors(nextErrors);
@@ -260,7 +295,11 @@ function App() {
       }
 
       upsertPost(data.post);
-      setForm({ ...initialForm, platforms: availablePlatformKeys(platforms) });
+      setForm({
+        ...initialForm,
+        selectedAccount: form.selectedAccount,
+        platforms: availablePlatformKeys(activePlatforms)
+      });
       showToast(
         form.publishMode === "scheduled" ? "Post scheduled successfully." : "Post published successfully.",
         "success"
@@ -303,15 +342,29 @@ function App() {
   };
 
   const historyPosts = useMemo(
-    () => posts.filter((post) => !isUpcomingScheduledPost(post)),
-    [posts]
+    () =>
+      posts.filter(
+        (post) =>
+          !isUpcomingScheduledPost(post) &&
+          (post.account === form.selectedAccount ||
+            (!post.account && selectedAccount?.default))
+      ),
+    [posts, form.selectedAccount, selectedAccount]
   );
   const scheduledPosts = useMemo(
-    () => posts.filter((post) => isUpcomingScheduledPost(post)),
-    [posts]
+    () =>
+      posts.filter(
+        (post) =>
+          isUpcomingScheduledPost(post) &&
+          (post.account === form.selectedAccount ||
+            (!post.account && selectedAccount?.default))
+      ),
+    [posts, form.selectedAccount, selectedAccount]
   );
 
   const canSubmit =
+    Boolean(form.selectedAccount) &&
+    accountMissingKeys.length === 0 &&
     form.platforms.length > 0 &&
     (form.caption.trim() || form.media) &&
     (form.publishMode === "instant" || (Boolean(form.scheduledDate) && Boolean(form.scheduledTime)));
@@ -382,6 +435,26 @@ function App() {
           )}
         </header>
 
+        <AccountSelector
+          accounts={accounts}
+          selectedAccount={form.selectedAccount}
+          onChange={changeAccount}
+        />
+
+        {accountMissingKeys.length > 0 && (
+          <section className="alert" aria-live="polite">
+            <AlertCircle size={18} />
+            <div>
+              <p>
+                {selectedAccount?.label || "Selected account"} env keys are missing in backend/.env.
+              </p>
+              {accountMissingKeys.map((message) => (
+                <p key={message}>{message}</p>
+              ))}
+            </div>
+          </section>
+        )}
+
         {errors.length > 0 && (
           <section className="alert" aria-live="polite">
             <AlertCircle size={18} />
@@ -400,7 +473,7 @@ function App() {
         ) : (
           <DashboardView
             form={form}
-            platforms={platforms}
+            activePlatforms={activePlatforms}
             previewUrl={previewUrl}
             selectedPlatformLabels={selectedPlatformLabels}
             canSubmit={canSubmit}
