@@ -22,7 +22,10 @@ PORT = int(getenv("PORT", "4000"))
 BACKEND_HOST = getenv("BACKEND_HOST", "127.0.0.1")
 FRONTEND_ORIGIN = getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 PUBLIC_API_BASE_URL = getenv("PUBLIC_API_BASE_URL", "http://localhost:4000")
+DATABASE_URL = getenv("DATABASE_URL", "")
 SOCIAL_DRY_RUN = bool_from_env(getenv("SOCIAL_DRY_RUN"), True)
+META_GRAPH_API_VERSION = getenv("META_GRAPH_API_VERSION", "v24.0")
+LINKEDIN_API_VERSION = getenv("LINKEDIN_API_VERSION", "202605")
 
 PLATFORMS: dict[str, PlatformConfig] = {
     "instagram": PlatformConfig(
@@ -53,7 +56,7 @@ def platform_status() -> list[dict]:
     statuses = []
 
     for key, platform in PLATFORMS.items():
-        missing_env = [env_name for env_name in platform.required_env if not getenv(env_name)]
+        missing_env = missing_required_env(key)
         statuses.append(
             {
                 "key": key,
@@ -65,3 +68,7 @@ def platform_status() -> list[dict]:
         )
 
     return statuses
+
+
+def missing_required_env(platform: str) -> list[str]:
+    return [env_name for env_name in PLATFORMS[platform].required_env if not getenv(env_name)]

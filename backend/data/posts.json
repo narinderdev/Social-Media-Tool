@@ -1,1 +1,192 @@
-[]
+[
+  {
+    "id": "4583f61a-50d2-4fc4-b760-9beff8656e51",
+    "caption": "New vdo",
+    "platforms": [
+      "instagram",
+      "facebook",
+      "linkedin"
+    ],
+    "textOnly": false,
+    "media": {
+      "originalName": "videoplayback.mp4",
+      "filename": "78edb3b0-8bd3-45d3-9828-f740f559a519.mp4",
+      "mimeType": "video/mp4",
+      "size": 2470883,
+      "url": "/uploads/78edb3b0-8bd3-45d3-9828-f740f559a519.mp4"
+    },
+    "createdAt": "2026-06-09T06:42:09.184080+00:00",
+    "results": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "message": "Published to Instagram.",
+        "remoteId": "18066381713413071"
+      },
+      {
+        "platform": "facebook",
+        "status": "published",
+        "message": "Published to Facebook.",
+        "remoteId": "36152929730987980"
+      },
+      {
+        "platform": "linkedin",
+        "status": "published",
+        "message": "Published to LinkedIn.",
+        "remoteId": "urn:li:ugcPost:7470002617725788160"
+      }
+    ]
+  },
+  {
+    "id": "dd58df79-00ec-48c9-9ea9-aee26ba07e4f",
+    "caption": "efsdsfsd",
+    "platforms": [
+      "instagram",
+      "facebook",
+      "linkedin"
+    ],
+    "textOnly": false,
+    "media": {
+      "originalName": "logo ss.png",
+      "filename": "ccf40484-bb6b-487e-b0e4-7ac03643df17.png",
+      "mimeType": "image/png",
+      "size": 11133,
+      "url": "/uploads/ccf40484-bb6b-487e-b0e4-7ac03643df17.png",
+      "instagram": {
+        "originalName": "logo ss.png",
+        "filename": "ccf40484-bb6b-487e-b0e4-7ac03643df17-instagram.jpg",
+        "mimeType": "image/jpeg",
+        "size": 6166,
+        "url": "/uploads/ccf40484-bb6b-487e-b0e4-7ac03643df17-instagram.jpg"
+      }
+    },
+    "createdAt": "2026-06-09T06:27:28.220294+00:00",
+    "results": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "message": "Published to Instagram.",
+        "remoteId": "18100207631172702"
+      },
+      {
+        "platform": "facebook",
+        "status": "published",
+        "message": "Published to Facebook.",
+        "remoteId": "122169635966676690"
+      },
+      {
+        "platform": "linkedin",
+        "status": "published",
+        "message": "Published to LinkedIn.",
+        "remoteId": "urn:li:share:7469998673763037186"
+      }
+    ]
+  },
+  {
+    "id": "e0a0efd4-d4b8-4fde-a20c-68f128bfd631",
+    "caption": "App launch soon!",
+    "platforms": [
+      "instagram",
+      "facebook",
+      "linkedin"
+    ],
+    "textOnly": false,
+    "media": {
+      "originalName": "app-mockup-1synMio7.jpg",
+      "filename": "c0245860-c8a1-4cfc-88f3-111d86c1cd2b.jpg",
+      "mimeType": "image/jpeg",
+      "size": 74173,
+      "url": "/uploads/c0245860-c8a1-4cfc-88f3-111d86c1cd2b.jpg"
+    },
+    "createdAt": "2026-06-08T12:29:20.505845+00:00",
+    "results": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "message": "Published to Instagram.",
+        "remoteId": "18105813628964427"
+      },
+      {
+        "platform": "facebook",
+        "status": "published",
+        "message": "Published to Facebook.",
+        "remoteId": "122169589544676690"
+      },
+      {
+        "platform": "linkedin",
+        "status": "published",
+        "message": "Published to LinkedIn.",
+        "remoteId": "urn:li:share:7469727343864119296"
+      }
+    ]
+  },
+  {
+    "id": "6c2583b5-83aa-42b2-a195-838143862b83",
+    "caption": "Wow",
+    "platforms": [
+      "instagram",
+      "facebook",
+      "linkedin"
+    ],
+    "textOnly": false,
+    "media": {
+      "originalName": "download.jpeg",
+      "filename": "f66058fe-d73f-4012-ad77-d4c258f25c3b.jpeg",
+      "mimeType": "image/jpeg",
+      "size": 2878,
+      "url": "/uploads/f66058fe-d73f-4012-ad77-d4c258f25c3b.jpeg"
+    },
+    "createdAt": "2026-06-08T11:53:49.885032+00:00",
+    "results": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "message": "Published to Instagram.",
+        "remoteId": "17972141706025553"
+      },
+      {
+        "platform": "facebook",
+        "status": "published",
+        "message": "Published to Facebook.",
+        "remoteId": "122169588128676690"
+      },
+      {
+        "platform": "linkedin",
+        "status": "published",
+        "message": "Published to LinkedIn.",
+        "remoteId": "urn:li:share:7469718414664564738"
+      }
+    ]
+  },
+  {
+    "id": "ce45a831-e23e-4ad6-aed1-3b9cb3d65567",
+    "caption": "",
+    "platforms": [
+      "instagram",
+      "facebook"
+    ],
+    "textOnly": false,
+    "media": {
+      "originalName": "download.jpeg",
+      "filename": "22ddbc1c-066d-44cb-996d-e31daa4b4355.jpeg",
+      "mimeType": "image/jpeg",
+      "size": 2878,
+      "url": "/uploads/22ddbc1c-066d-44cb-996d-e31daa4b4355.jpeg"
+    },
+    "createdAt": "2026-06-08T10:50:26.922798+00:00",
+    "results": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "message": "Published to Instagram.",
+        "remoteId": "17910926070410484"
+      },
+      {
+        "platform": "facebook",
+        "status": "published",
+        "message": "Published to Facebook.",
+        "remoteId": "122169585026676690"
+      }
+    ]
+  }
+]

@@ -1,8 +1,11 @@
 import json
+from urllib.parse import urlparse
 
 from fastapi import UploadFile
 
-from app.config import PLATFORMS
+from app.config import PLATFORMS, PUBLIC_API_BASE_URL, SOCIAL_DRY_RUN, missing_required_env
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 
 
 def parse_platforms(value: str | None) -> list[str]:
@@ -17,6 +20,11 @@ def parse_platforms(value: str | None) -> list[str]:
         pass
 
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def is_public_https_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme == "https" and parsed.hostname not in LOCAL_HOSTS
 
 
 def validate_post_payload(
@@ -36,6 +44,19 @@ def validate_post_payload(
     if unsupported:
         errors.append(f"Unsupported platform: {', '.join(unsupported)}.")
 
+    supported_platforms = [platform for platform in selected_platforms if platform in PLATFORMS]
+    if SOCIAL_DRY_RUN and supported_platforms:
+        errors.append(
+            "Local dry-run posting is disabled. Set SOCIAL_DRY_RUN=false and configure platform API keys."
+        )
+    elif supported_platforms:
+        for platform in supported_platforms:
+            missing_env = missing_required_env(platform)
+            if missing_env:
+                errors.append(
+                    f"{PLATFORMS[platform].label} needs keys: {', '.join(missing_env)}."
+                )
+
     if media is None and not clean_caption:
         errors.append("Add media or write text before posting.")
 
@@ -44,6 +65,16 @@ def validate_post_payload(
 
     if "instagram" in selected_platforms and media is None:
         errors.append("Instagram posting requires an image or video file.")
+
+    instagram_needs_public_media_url = (
+        "instagram" in selected_platforms
+        and media is not None
+        and not is_public_https_url(PUBLIC_API_BASE_URL)
+    )
+    if instagram_needs_public_media_url:
+        errors.append(
+            "Instagram posting needs PUBLIC_API_BASE_URL to be a public HTTPS URL, not localhost."
+        )
 
     content_type = media.content_type if media is not None else ""
     if media is not None and not (

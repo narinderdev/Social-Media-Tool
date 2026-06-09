@@ -23,8 +23,29 @@ const platformStyles = {
 const initialForm = {
   caption: "",
   textOnly: false,
-  platforms: ["instagram", "facebook", "linkedin", "twitter"],
+  platforms: [],
   media: null
+};
+
+const availablePlatformKeys = (platformItems, textOnly = false, hasMedia = false) =>
+  platformItems
+    .filter(
+      (platform) =>
+        platform.configured && !((textOnly || !hasMedia) && platform.key === "instagram")
+    )
+    .map((platform) => platform.key);
+
+const errorMessage = (error) => {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return error?.description || error?.detail || error?.message || "Could not create post.";
+};
+
+const errorMessages = (data) => {
+  const errors = data.errors || data.detail || ["Could not create post."];
+  return Array.isArray(errors) ? errors.map(errorMessage) : [errorMessage(errors)];
 };
 
 function App() {
@@ -74,6 +95,23 @@ function App() {
 
       setPlatforms(platformData.platforms || []);
       setPosts(postsData.posts || []);
+      setForm((current) => ({
+        ...current,
+        platforms:
+          current.platforms.length > 0
+            ? current.platforms.filter((platform) =>
+                availablePlatformKeys(
+                  platformData.platforms || [],
+                  current.textOnly,
+                  Boolean(current.media)
+                ).includes(platform)
+              )
+            : availablePlatformKeys(
+                platformData.platforms || [],
+                current.textOnly,
+                Boolean(current.media)
+              )
+      }));
     } catch {
       setErrors(["Backend is not reachable. Start the API server first."]);
     } finally {
@@ -125,12 +163,12 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        setErrors(data.errors || data.detail || ["Could not create post."]);
+        setErrors(errorMessages(data));
         return;
       }
 
       setPosts((current) => [data.post, ...current]);
-      setForm(initialForm);
+      setForm({ ...initialForm, platforms: availablePlatformKeys(platforms) });
     } catch {
       setErrors(["Post request failed. Check that the backend is running."]);
     } finally {
@@ -208,7 +246,19 @@ function App() {
                 type="file"
                 accept="image/*,video/*"
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, media: event.target.files?.[0] || null }))
+                  setForm((current) => {
+                    const media = event.target.files?.[0] || null;
+                    const instagramReady = platforms.some(
+                      (platform) => platform.key === "instagram" && platform.configured
+                    );
+                    return {
+                      ...current,
+                      media,
+                      platforms: media
+                        ? [...new Set([...current.platforms, ...(instagramReady ? ["instagram"] : [])])]
+                        : current.platforms.filter((platform) => platform !== "instagram")
+                    };
+                  })
                 }
               />
             </label>
@@ -218,7 +268,9 @@ function App() {
             <legend>Platforms</legend>
             <div className="platform-grid">
               {platforms.map((platform) => {
-                const disabled = form.textOnly && platform.key === "instagram";
+                const disabled =
+                  !platform.configured ||
+                  ((form.textOnly || !form.media) && platform.key === "instagram");
                 const selected = form.platforms.includes(platform.key);
                 const style = platformStyles[platform.key] || { name: platform.label, tone: "stone" };
 
