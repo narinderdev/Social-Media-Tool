@@ -4,7 +4,9 @@ import { fallbackPlatforms, platformStyles } from "../constants";
 
 function DashboardView({
   form,
+  accounts,
   activePlatforms,
+  selectedPublishAccounts,
   previewUrl,
   selectedPlatformLabels,
   canSubmit,
@@ -15,6 +17,26 @@ function DashboardView({
   submitPost
 }) {
   const visiblePlatforms = activePlatforms.length > 0 ? activePlatforms : fallbackPlatforms;
+  const accountReady = (account) => account.platforms.every((platform) => platform.configured);
+  const accountMissingText = (account) =>
+    account.platforms
+      .filter((platform) => !platform.configured)
+      .map((platform) => `${platform.label}: ${platform.missingEnv.join(", ")}`)
+      .join(" | ");
+
+  const updatePublishAccount = (accountKey, checked) => {
+    setForm((current) => {
+      const nextAccounts = checked
+        ? [...current.selectedAccounts, accountKey]
+        : current.selectedAccounts.filter((item) => item !== accountKey);
+
+      return {
+        ...current,
+        selectedAccounts: [...new Set(nextAccounts)]
+      };
+    });
+  };
+
   const removeMedia = () => {
     setForm((current) => ({
       ...current,
@@ -184,6 +206,35 @@ function DashboardView({
               />
             </div>
           )}
+        </fieldset>
+
+        <fieldset className="publish-account-panel">
+          <legend>Post to account</legend>
+          <div className="account-checkbox-list">
+            {accounts.map((account) => {
+              const ready = accountReady(account);
+              return (
+                <label className="account-checkbox-option" key={account.key}>
+                  <input
+                    type="checkbox"
+                    checked={form.selectedAccounts.includes(account.key)}
+                    disabled={!ready}
+                    onChange={(event) => updatePublishAccount(account.key, event.target.checked)}
+                  />
+                  <span>
+                    <strong>{account.label}</strong>
+                    <small>{ready ? "Ready" : `Missing env: ${accountMissingText(account)}`}</small>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="helper-text">
+            Selected:{" "}
+            {selectedPublishAccounts.length > 0
+              ? selectedPublishAccounts.map((account) => account.label).join(", ")
+              : "No account selected"}
+          </p>
         </fieldset>
 
         <button className="submit-button" type="submit" disabled={!canSubmit || submitting}>

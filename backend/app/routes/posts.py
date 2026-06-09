@@ -67,65 +67,88 @@ async def create_post(
                 media_paths.append(UPLOADS_DIR / instagram_media["filename"])
                 media_data["instagram"] = instagram_media
 
-    post = {
+    base_post = {
         "id": str(uuid4()),
         "caption": value["caption"],
         "platforms": value["platforms"],
-        "account": value["account"],
-        "accountLabel": social_account_label(value["account"]),
         "textOnly": value["textOnly"],
         "media": media_data,
         "status": "scheduled" if value["scheduleMode"] == "scheduled" else "publishing",
         "scheduledAt": value["scheduledAt"],
         "createdAt": datetime.now(UTC).isoformat(),
     }
+    posts = [
+        {
+            **base_post,
+            "id": str(uuid4()),
+            "account": account,
+            "accountLabel": social_account_label(account),
+        }
+        for account in value["accounts"]
+    ]
 
     if value["scheduleMode"] == "scheduled":
-        scheduled_post = append_post(
-            {
-                **post,
-                "status": "scheduled",
-                "results": [
+        scheduled_posts = [
+            append_post(
+                {
+                    **post,
+                    "status": "scheduled",
+                    "results": [
+                        {
+                            "platform": platform,
+                            "status": "scheduled",
+                            "message": f"Scheduled for {value['scheduledAt']}.",
+                        }
+                        for platform in post["platforms"]
+                    ],
+                }
+            )
+            for post in posts
+        ]
+        return {"post": scheduled_posts[0], "posts": scheduled_posts}
+
+    saved_posts = []
+    all_failed_results = []
+    all_published_results = []
+    for post in posts:
+        results = await publish_post(post)
+        failed_results = [result for result in results if result["status"] != "published"]
+        published_results = [result for result in results if result["status"] == "published"]
+        all_failed_results.extend(
+            [
+                {**result, "account": post["account"], "accountLabel": post["accountLabel"]}
+                for result in failed_results
+            ]
+        )
+        all_published_results.extend(published_results)
+        if published_results:
+            saved_posts.append(
+                append_post(
                     {
-                        "platform": platform,
-                        "status": "scheduled",
-                        "message": f"Scheduled for {value['scheduledAt']}.",
+                        **post,
+                        "status": "partial_failed" if failed_results else "published",
+                        "publishedAt": datetime.now(UTC).isoformat(),
+                        "results": results,
                     }
-                    for platform in post["platforms"]
-                ],
-            }
-        )
-        return {"post": scheduled_post}
+                )
+            )
 
-    results = await publish_post(post)
-    failed_results = [result for result in results if result["status"] != "published"]
-    published_results = [result for result in results if result["status"] == "published"]
-    saved_post = None
-    if published_results:
-        saved_post = append_post(
-            {
-                **post,
-                "status": "partial_failed" if failed_results else "published",
-                "publishedAt": datetime.now(UTC).isoformat(),
-                "results": results,
-            }
-        )
-
-    if failed_results and not published_results:
+    if all_failed_results and not all_published_results:
         for media_path in media_paths:
             if media_path.exists():
                 media_path.unlink()
 
-    if failed_results:
+    if all_failed_results:
         raise HTTPException(
             status_code=502,
             detail={
-                "post": saved_post,
+                "post": saved_posts[0] if saved_posts else None,
+                "posts": saved_posts,
                 "errors": [
-                    f"{result['platform']}: {result.get('message', 'Publish failed.')}"
-                    for result in failed_results
+                    f"{result['accountLabel']} {result['platform']}: {result.get('message', 'Publish failed.')}"
+                    for result in all_failed_results
                 ],
             },
         )
 
-    return {"post": saved_post}
+    return {"post": saved_posts[0], "posts": saved_posts}

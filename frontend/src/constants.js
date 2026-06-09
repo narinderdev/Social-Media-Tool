@@ -24,5 +24,6 @@ export const initialForm = {
   publishMode: "instant",
   scheduledDate: "",
   scheduledTime: "",
-  selectedAccount: ""
+  selectedAccount: "",
+  selectedAccounts: []
 };

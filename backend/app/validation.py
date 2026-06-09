@@ -24,6 +24,20 @@ def parse_platforms(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def parse_accounts(value: str | None) -> list[str]:
+    if not value:
+        return []
+
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [key_from_label(str(item)) for item in parsed]
+    except json.JSONDecodeError:
+        pass
+
+    return [key_from_label(item) for item in value.split(",") if item.strip()]
+
+
 def is_public_https_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme == "https" and parsed.hostname not in LOCAL_HOSTS
@@ -41,14 +55,21 @@ def validate_post_payload(
     selected_platforms = list(dict.fromkeys(parse_platforms(platforms)))
     clean_caption = (caption or "").strip()
     clean_schedule_mode = (schedule_mode or "instant").strip().lower()
-    selected_account = key_from_label(account or default_social_account())
+    selected_accounts = list(
+        dict.fromkeys(parse_accounts(account) or [key_from_label(default_social_account())])
+    )
     parsed_scheduled_at = None
     errors = []
 
     if clean_schedule_mode not in {"instant", "scheduled"}:
         errors.append("Choose instant post or scheduled post.")
 
-    if not is_supported_account(selected_account):
+    unsupported_accounts = [
+        selected_account
+        for selected_account in selected_accounts
+        if not is_supported_account(selected_account)
+    ]
+    if unsupported_accounts:
         errors.append("Choose a supported social account.")
 
     if not selected_platforms:
@@ -64,12 +85,13 @@ def validate_post_payload(
             "Local dry-run posting is disabled. Set SOCIAL_DRY_RUN=false and configure platform API keys."
         )
     elif supported_platforms:
-        for platform in supported_platforms:
-            missing_env = missing_required_env(platform, selected_account)
-            if missing_env:
-                errors.append(
-                    f"{PLATFORMS[platform].label} needs keys: {', '.join(missing_env)}."
-                )
+        for selected_account in selected_accounts:
+            for platform in supported_platforms:
+                missing_env = missing_required_env(platform, selected_account)
+                if missing_env:
+                    errors.append(
+                        f"{selected_account} {PLATFORMS[platform].label} needs keys: {', '.join(missing_env)}."
+                    )
 
     if media is None and not clean_caption:
         errors.append("Add media or write text before posting.")
@@ -116,5 +138,6 @@ def validate_post_payload(
         "textOnly": text_only,
         "scheduleMode": clean_schedule_mode,
         "scheduledAt": parsed_scheduled_at.isoformat() if parsed_scheduled_at else None,
-        "account": selected_account,
+        "accounts": selected_accounts,
+        "account": selected_accounts[0],
     }

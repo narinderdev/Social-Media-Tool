@@ -472,6 +472,49 @@ fieldset {
   gap: 10px;
 }
 
+.publish-account-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.account-checkbox-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.account-checkbox-option {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #ddd6cb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffaf4;
+}
+
+.account-checkbox-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: #1f6f68;
+}
+
+.account-checkbox-option span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-checkbox-option small,
+.helper-text {
+  color: #69737e;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .submit-button {
   width: 100%;
   background: #cf5d38;
@@ -916,6 +959,7 @@ time {
   .mode-row,
   .schedule-options,
   .schedule-fields,
+  .account-checkbox-list,
   .filter-bar {
     grid-template-columns: 1fr;
   }

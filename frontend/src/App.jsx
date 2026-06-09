@@ -45,13 +45,42 @@ function App() {
     () => accounts.find((account) => account.key === form.selectedAccount),
     [accounts, form.selectedAccount]
   );
-  const activePlatforms = selectedAccount?.platforms || [];
+  const selectedPublishAccounts = useMemo(
+    () => accounts.filter((account) => form.selectedAccounts.includes(account.key)),
+    [accounts, form.selectedAccounts]
+  );
+  const activePlatforms = useMemo(() => {
+    if (route !== "dashboard" || selectedPublishAccounts.length === 0) {
+      return selectedAccount?.platforms || [];
+    }
+
+    return (selectedAccount?.platforms || []).map((platform) => {
+      const selectedAccountPlatforms = selectedPublishAccounts
+        .map((account) => account.platforms.find((item) => item.key === platform.key))
+        .filter(Boolean);
+      const missingEnv = selectedAccountPlatforms.flatMap((item) => item.missingEnv || []);
+
+      return {
+        ...platform,
+        configured:
+          selectedAccountPlatforms.length === selectedPublishAccounts.length &&
+          selectedAccountPlatforms.every((item) => item.configured),
+        missingEnv: [...new Set(missingEnv)]
+      };
+    });
+  }, [route, selectedAccount, selectedPublishAccounts]);
   const accountMissingKeys = useMemo(
     () =>
-      activePlatforms
-        .filter((platform) => !platform.configured)
-        .map((platform) => `${platform.label}: ${platform.missingEnv.join(", ")}`),
-    [activePlatforms]
+      (route === "dashboard" ? selectedPublishAccounts : [selectedAccount].filter(Boolean))
+        .flatMap((account) =>
+          (account.platforms || [])
+            .filter((platform) => !platform.configured)
+            .map(
+              (platform) =>
+                `${account.label} ${platform.label}: ${platform.missingEnv.join(", ")}`
+            )
+        ),
+    [route, selectedPublishAccounts, selectedAccount]
   );
 
   useEffect(() => {
@@ -169,6 +198,14 @@ function App() {
           );
           return {
             selectedAccount: nextAccount?.key || "",
+            selectedAccounts:
+              current.selectedAccounts.length > 0
+                ? current.selectedAccounts.filter((accountKey) =>
+                    nextAccounts.some((account) => account.key === accountKey)
+                  )
+                : nextAccount?.key
+                ? [nextAccount.key]
+                : [],
             platforms:
               current.platforms.length > 0
                 ? current.platforms.filter((platform) => availablePlatforms.includes(platform))
@@ -216,6 +253,7 @@ function App() {
     setForm((current) => ({
       ...current,
       selectedAccount: accountKey,
+      selectedAccounts: [accountKey],
       platforms: availablePlatformKeys(nextPlatforms, current.textOnly, Boolean(current.media))
     }));
     setErrors([]);
@@ -255,7 +293,7 @@ function App() {
     payload.append("caption", form.caption);
     payload.append("textOnly", String(form.textOnly));
     payload.append("platforms", JSON.stringify(form.platforms));
-    payload.append("account", form.selectedAccount);
+    payload.append("account", JSON.stringify(form.selectedAccounts));
     payload.append("scheduleMode", form.publishMode);
     payload.append(
       "scheduledAt",
@@ -280,11 +318,13 @@ function App() {
 
       if (!response.ok) {
         const partialPost = data.post || data.detail?.post;
-        if (partialPost) {
-          upsertPost(partialPost);
+        const partialPosts = data.posts || data.detail?.posts || (partialPost ? [partialPost] : []);
+        if (partialPosts.length > 0) {
+          partialPosts.forEach(upsertPost);
           setForm({
             ...initialForm,
             selectedAccount: form.selectedAccount,
+            selectedAccounts: form.selectedAccounts,
             platforms: availablePlatformKeys(activePlatforms)
           });
         }
@@ -294,10 +334,11 @@ function App() {
         return;
       }
 
-      upsertPost(data.post);
+      (data.posts || [data.post]).filter(Boolean).forEach(upsertPost);
       setForm({
         ...initialForm,
         selectedAccount: form.selectedAccount,
+        selectedAccounts: form.selectedAccounts,
         platforms: availablePlatformKeys(activePlatforms)
       });
       showToast(
@@ -364,6 +405,7 @@ function App() {
 
   const canSubmit =
     Boolean(form.selectedAccount) &&
+    form.selectedAccounts.length > 0 &&
     accountMissingKeys.length === 0 &&
     form.platforms.length > 0 &&
     (form.caption.trim() || form.media) &&
@@ -435,12 +477,6 @@ function App() {
           )}
         </header>
 
-        <AccountSelector
-          accounts={accounts}
-          selectedAccount={form.selectedAccount}
-          onChange={changeAccount}
-        />
-
         {accountMissingKeys.length > 0 && (
           <section className="alert" aria-live="polite">
             <AlertCircle size={18} />
@@ -467,13 +503,29 @@ function App() {
         )}
 
         {route === "posts" ? (
-          <HistoryView posts={historyPosts} loading={loading} />
+          <>
+            <AccountSelector
+              accounts={accounts}
+              selectedAccount={form.selectedAccount}
+              onChange={changeAccount}
+            />
+            <HistoryView posts={historyPosts} loading={loading} />
+          </>
         ) : route === "scheduled" ? (
-          <ScheduledView posts={scheduledPosts} loading={loading} />
+          <>
+            <AccountSelector
+              accounts={accounts}
+              selectedAccount={form.selectedAccount}
+              onChange={changeAccount}
+            />
+            <ScheduledView posts={scheduledPosts} loading={loading} />
+          </>
         ) : (
           <DashboardView
             form={form}
+            accounts={accounts}
             activePlatforms={activePlatforms}
+            selectedPublishAccounts={selectedPublishAccounts}
             previewUrl={previewUrl}
             selectedPlatformLabels={selectedPlatformLabels}
             canSubmit={canSubmit}
