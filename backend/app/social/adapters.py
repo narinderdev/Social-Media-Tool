@@ -605,7 +605,8 @@ async def publish_to_facebook(post: dict[str, Any]) -> dict[str, Any]:
         "platform": "facebook",
         "status": "published",
         "message": "Published to Facebook.",
-        "remoteId": published.get("id") or published.get("post_id"),
+        "remoteId": published.get("post_id") or published.get("id"),
+        "mediaId": published.get("id"),
     }
 
 

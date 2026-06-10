@@ -3,13 +3,16 @@ from pathlib import Path
 from shutil import copyfileobj
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 
 from app.auth import require_user
 from app.config import social_account_label
 from app.media import create_instagram_image
+from app.social.analytics import fetch_post_metrics
 from app.social.publisher import publish_post
-from app.storage import UPLOADS_DIR, append_post, read_posts
+from app.storage import UPLOADS_DIR, append_post, read_posts, save_post_stats
 from app.validation import validate_post_payload
 
 router = APIRouter(prefix="/api/posts", tags=["posts"])
@@ -18,6 +21,30 @@ router = APIRouter(prefix="/api/posts", tags=["posts"])
 @router.get("")
 def get_posts(_: dict = Depends(require_user)) -> dict:
     return {"posts": read_posts()}
+
+
+@router.post("/{post_id}/metrics")
+async def refresh_post_metrics(
+    post_id: str,
+    body: dict[str, Any] | None = Body(default=None),
+    _: dict = Depends(require_user),
+) -> dict:
+    post = next((item for item in read_posts() if item.get("id") == post_id), None)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found.")
+
+    selected_platforms = body.get("platforms") if isinstance(body, dict) else None
+    if not isinstance(selected_platforms, list):
+        selected_platforms = None
+
+    selected_platforms = [
+        platform
+        for platform in selected_platforms or post.get("platforms", [])
+        if isinstance(platform, str)
+    ]
+    metrics = await fetch_post_metrics(post, selected_platforms)
+
+    return {"post": save_post_stats(post, metrics)}
 
 
 @router.post("", status_code=201)

@@ -56,6 +56,23 @@ def ensure_posts_table() -> None:
         )
 
 
+def ensure_post_stats_table() -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS post_stats (
+                post_id text NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                platform text NOT NULL,
+                metrics jsonb NOT NULL,
+                refreshed_at timestamptz NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (post_id, platform)
+            )
+            """
+        )
+
+
 def hash_password(password: str) -> str:
     iterations = 260000
     salt = secrets.token_hex(16)
@@ -113,6 +130,8 @@ def seed_admin_user() -> None:
 def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
     from psycopg.types.json import Jsonb
 
+    post_payload = {key: value for key, value in post.items() if key != "metrics"}
+
     with db_connection() as connection:
         connection.execute(
             """
@@ -156,10 +175,10 @@ def append_post_to_database(post: dict[str, Any]) -> dict[str, Any]:
                 post.get("status", "published"),
                 post.get("scheduledAt"),
                 post["createdAt"],
-                Jsonb(post),
+                Jsonb(post_payload),
             ),
         )
-    return post
+    return post_payload
 
 
 def migrate_json_posts_to_database() -> None:
@@ -169,15 +188,45 @@ def migrate_json_posts_to_database() -> None:
     posts = json.loads(POSTS_FILE.read_text(encoding="utf-8"))
     for post in posts:
         append_post_to_database(post)
+        if post.get("metrics"):
+            save_post_stats_to_database(post["id"], post["metrics"])
+
+
+def migrate_embedded_metrics_to_stats() -> None:
+    with db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, payload->'metrics'
+                FROM posts
+                WHERE payload ? 'metrics'
+                """
+            )
+            rows = cursor.fetchall()
+
+    for post_id, metrics in rows:
+        if metrics:
+            save_post_stats_to_database(post_id, metrics)
+
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE posts
+            SET payload = payload - 'metrics'
+            WHERE payload ? 'metrics'
+            """
+        )
 
 
 def ensure_storage() -> None:
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     if using_database():
         ensure_posts_table()
+        ensure_post_stats_table()
         ensure_auth_tables()
         seed_admin_user()
         migrate_json_posts_to_database()
+        migrate_embedded_metrics_to_stats()
         return
 
     if not POSTS_FILE.exists():
@@ -189,8 +238,16 @@ def read_posts() -> list[dict[str, Any]]:
     if using_database():
         with db_connection() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT payload FROM posts ORDER BY created_at DESC")
-                return [row[0] for row in cursor.fetchall()]
+                cursor.execute("SELECT id, payload FROM posts ORDER BY created_at DESC")
+                rows = cursor.fetchall()
+                posts = [row[1] for row in rows]
+                metrics_by_post = read_post_stats_map([row[0] for row in rows], connection)
+                return [
+                    {**post, "metrics": metrics_by_post[post["id"]]}
+                    if post["id"] in metrics_by_post
+                    else post
+                    for post in posts
+                ]
 
     return json.loads(POSTS_FILE.read_text(encoding="utf-8"))
 
@@ -213,6 +270,87 @@ def update_post(post: dict[str, Any]) -> dict[str, Any]:
     next_posts = [post if item["id"] == post["id"] else item for item in posts]
     POSTS_FILE.write_text(json.dumps(next_posts, indent=2) + "\n", encoding="utf-8")
     return post
+
+
+def read_post_stats_map(
+    post_ids: list[str],
+    connection: Any | None = None,
+) -> dict[str, dict[str, Any]]:
+    if not post_ids:
+        return {}
+
+    close_connection = False
+    if connection is None:
+        connection = db_connection()
+        close_connection = True
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT post_id, platform, metrics, refreshed_at
+                FROM post_stats
+                WHERE post_id = ANY(%s)
+                ORDER BY refreshed_at DESC
+                """,
+                (post_ids,),
+            )
+            rows = cursor.fetchall()
+    finally:
+        if close_connection:
+            connection.close()
+
+    metrics_by_post: dict[str, dict[str, Any]] = {}
+    for post_id, platform, metrics, refreshed_at in rows:
+        post_metrics = metrics_by_post.setdefault(post_id, {"updatedAt": "", "platforms": {}})
+        post_metrics["platforms"][platform] = metrics
+        refreshed_at_iso = refreshed_at.isoformat()
+        if not post_metrics["updatedAt"] or refreshed_at_iso > post_metrics["updatedAt"]:
+            post_metrics["updatedAt"] = refreshed_at_iso
+
+    return metrics_by_post
+
+
+def save_post_stats_to_database(post_id: str, metrics: dict[str, Any]) -> dict[str, Any]:
+    from psycopg.types.json import Jsonb
+
+    platform_metrics = metrics.get("platforms", {})
+    if not platform_metrics:
+        return metrics
+
+    with db_connection() as connection:
+        for platform, platform_metric in platform_metrics.items():
+            refreshed_at = platform_metric.get("updatedAt") or metrics.get("updatedAt")
+            connection.execute(
+                """
+                INSERT INTO post_stats (post_id, platform, metrics, refreshed_at, updated_at)
+                VALUES (%s, %s, %s, %s::timestamptz, now())
+                ON CONFLICT (post_id, platform) DO UPDATE SET
+                    metrics = EXCLUDED.metrics,
+                    refreshed_at = EXCLUDED.refreshed_at,
+                    updated_at = now()
+                """,
+                (post_id, platform, Jsonb(platform_metric), refreshed_at),
+            )
+
+    return metrics
+
+
+def save_post_stats(post: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
+    current_platform_metrics = post.get("metrics", {}).get("platforms", {})
+    merged_metrics = {
+        "updatedAt": metrics["updatedAt"],
+        "platforms": {
+            **current_platform_metrics,
+            **metrics.get("platforms", {}),
+        },
+    }
+
+    if using_database():
+        save_post_stats_to_database(post["id"], metrics)
+        return {**post, "metrics": merged_metrics}
+
+    return update_post({**post, "metrics": merged_metrics})
 
 
 def read_due_scheduled_posts() -> list[dict[str, Any]]:
