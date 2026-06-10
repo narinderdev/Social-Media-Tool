@@ -46,7 +46,7 @@ function DashboardView({
   };
 
   return (
-    <section className="workspace">
+    <section className={previewUrl ? "workspace" : "workspace workspace-full"}>
       <form className="composer-panel" onSubmit={submitPost}>
         <div className="panel-heading">
           <h2>New post</h2>
@@ -243,33 +243,25 @@ function DashboardView({
         </button>
       </form>
 
-      <aside className="preview-panel">
-        <div className="panel-heading">
-          <h2>Preview</h2>
-          {previewUrl ? (
+      {previewUrl && (
+        <aside className="preview-panel">
+          <div className="panel-heading">
+            <h2>Preview</h2>
             <button className="remove-media-button" type="button" onClick={removeMedia}>
               <X size={15} />
               Remove media
             </button>
-          ) : (
-            <span>{form.textOnly ? "Text" : "Media"}</span>
-          )}
-        </div>
+          </div>
 
-        {previewUrl ? (
-          form.media?.type.startsWith("video/") ? (
+          {form.media?.type.startsWith("video/") ? (
             <video className="media-preview" src={previewUrl} controls />
           ) : (
             <img className="media-preview" src={previewUrl} alt="" />
-          )
-        ) : (
-          <div className="empty-preview">
-            {form.textOnly ? <FileText size={42} /> : <ImagePlus size={42} />}
-          </div>
-        )}
+          )}
 
-        <p className="preview-caption">{form.caption || "Caption will appear here."}</p>
-      </aside>
+          <p className="preview-caption">{form.caption || "Caption will appear here."}</p>
+        </aside>
+      )}
     </section>
   );
 }

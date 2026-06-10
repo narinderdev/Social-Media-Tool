@@ -112,9 +112,9 @@ input:disabled {
 }
 
 .app-shell {
-  width: min(1180px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 28px 0 44px;
+  width: 100%;
+  min-width: 0;
+  padding: 28px 32px 44px;
 }
 
 .top-bar,
@@ -251,6 +251,10 @@ h2 {
   grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
   gap: 18px;
   align-items: stretch;
+}
+
+.workspace-full {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .composer-panel,
@@ -1162,7 +1166,11 @@ time {
   font-size: 0.9rem;
 }
 
-.platform-stat-row p {
+.platform-stat-row .platform-message {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #4b5965;
+  background: #f4f0e8;
   color: #596470;
   line-height: 1.4;
 }
@@ -1329,8 +1337,7 @@ time {
   }
 
   .app-shell {
-    width: min(100% - 20px, 1180px);
-    padding-top: 18px;
+    padding: 18px 10px 44px;
   }
 
   .platform-grid,

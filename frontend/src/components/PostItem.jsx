@@ -50,6 +50,29 @@ const formatStatus = (status) =>
         .join(" ")
     : "Unknown";
 
+const formatPlatformMessage = (message) => {
+  if (!message) {
+    return "No message saved.";
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  if (
+    normalizedMessage.includes("unsupported get request") ||
+    normalizedMessage.includes("does not exist")
+  ) {
+    return (
+      "Stats unavailable: the platform could not load this post ID, or the connected account "
+      + "does not have permission to read it."
+    );
+  }
+
+  if (message.length > 180) {
+    return `${message.slice(0, 177).trim()}...`;
+  }
+
+  return message;
+};
+
 const metricLabels = [
   ["impressions", "Impressions", "Times the post/media was shown."],
   ["views", "Views", "Media plays or media views reported by the platform."],
@@ -376,7 +399,9 @@ function PostStatsModal({ post, publishType, onClose }) {
                               </span>
                             ))}
                           </div>
-                          <p>{metric?.message || result.message || "No message saved."}</p>
+                          <p className="platform-message">
+                            {formatPlatformMessage(metric?.message || result.message)}
+                          </p>
                           {metric?.updatedAt && (
                             <small>Updated: {new Date(metric.updatedAt).toLocaleString()}</small>
                           )}

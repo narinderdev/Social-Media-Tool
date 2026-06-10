@@ -245,6 +245,27 @@ def linkedin_metric_error_message(message: str) -> str:
     return message
 
 
+def facebook_metric_message(status: str, errors: list[str]) -> str:
+    if status == "available":
+        return "Facebook post insights refreshed."
+    if status == "partial":
+        return "Facebook engagement counts refreshed from post edges."
+
+    combined_errors = " ".join(errors).lower()
+    if "unsupported get request" in combined_errors or "does not exist" in combined_errors:
+        return (
+            "Facebook stats unavailable: Meta could not load this post ID. "
+            "It may be missing, deleted, not published to the page feed, or inaccessible to this page token."
+        )
+    if any(error_means_unavailable_metric(error) for error in errors):
+        return (
+            "Facebook stats unavailable: Meta did not return these metrics with the current "
+            "post ID and page permissions."
+        )
+
+    return "No Facebook metrics returned."
+
+
 async def fetch_instagram_metrics(post: dict[str, Any], remote_id: str) -> dict[str, Any]:
     token = credential(post, "INSTAGRAM_ACCESS_TOKEN")
     metric_map = {
@@ -376,13 +397,7 @@ async def fetch_facebook_metrics(post: dict[str, Any], remote_id: str) -> dict[s
     return platform_metric(
         "facebook",
         status,
-        (
-            "Facebook post insights refreshed."
-            if status == "available"
-            else "Facebook engagement counts refreshed from post edges."
-            if status == "partial"
-            else "; ".join(errors) or "No Facebook metrics returned."
-        ),
+        facebook_metric_message(status, errors),
         post_id,
         values,
         raw,
