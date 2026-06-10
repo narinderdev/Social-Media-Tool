@@ -42,9 +42,14 @@ const formatBytes = (bytes) => {
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
+const statusLabels = {
+  missing: "Possibly deleted"
+};
+
 const formatStatus = (status) =>
   status
-    ? status
+    ? statusLabels[status] ||
+      status
         .split("_")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ")
@@ -58,11 +63,12 @@ const formatPlatformMessage = (message) => {
   const normalizedMessage = message.toLowerCase();
   if (
     normalizedMessage.includes("unsupported get request") ||
-    normalizedMessage.includes("does not exist")
+    normalizedMessage.includes("does not exist") ||
+    normalizedMessage.includes("missing or inaccessible")
   ) {
     return (
-      "Stats unavailable: the platform could not load this post ID, or the connected account "
-      + "does not have permission to read it."
+      "Possibly deleted: the platform could not load this post ID, or the connected account "
+      + "cannot read it."
     );
   }
 
@@ -423,6 +429,7 @@ function PostItem({ post }) {
   const [showStats, setShowStats] = useState(false);
   const publishType = publishTypeForPost(post);
   const results = post.results || [];
+  const platformMetrics = post.metrics?.platforms || {};
   const mediaIsVideo = post.media?.mimeType?.startsWith("video/");
   const statsLabel = `Open stats for ${post.caption || post.media?.originalName || "post"}`;
 
@@ -466,16 +473,21 @@ function PostItem({ post }) {
         </div>
 
         <div className="result-row">
-          {results.map((result) => (
-            <span
-              className={`result-pill ${result.status}`}
-              key={result.platform}
-              title={result.message}
-            >
-              <ResultIcon status={result.status} />
-              {platformStyles[result.platform]?.name || result.platform}
-            </span>
-          ))}
+          {results.map((result) => {
+            const metric = platformMetrics[result.platform];
+            const analyticsStatus = metric?.status ? ` Stats: ${formatStatus(metric.status)}.` : "";
+
+            return (
+              <span
+                className={`result-pill ${result.status}`}
+                key={result.platform}
+                title={`${result.message || ""}${analyticsStatus}`.trim()}
+              >
+                <ResultIcon status={result.status} />
+                {platformStyles[result.platform]?.name || result.platform}
+              </span>
+            );
+          })}
         </div>
       </article>
 

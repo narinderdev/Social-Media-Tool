@@ -779,6 +779,11 @@ time {
   background: #fff1d7;
 }
 
+.result-pill.missing {
+  color: #8b3f00;
+  background: #ffe1c2;
+}
+
 .result-pill.needs_credentials,
 .result-pill.failed,
 .result-pill.not_implemented,
@@ -1169,7 +1174,6 @@ time {
 .platform-stat-row .platform-message {
   padding: 10px 12px;
   border-radius: 8px;
-  color: #4b5965;
   background: #f4f0e8;
   color: #596470;
   line-height: 1.4;

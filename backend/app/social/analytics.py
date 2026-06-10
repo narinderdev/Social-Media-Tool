@@ -235,6 +235,25 @@ def error_means_unavailable_metric(error: str | None) -> bool:
     )
 
 
+def error_means_missing_post(error: str | None) -> bool:
+    if not error:
+        return False
+
+    value = error.lower()
+    return any(
+        pattern in value
+        for pattern in (
+            "unsupported get request",
+            "does not exist",
+            "cannot be loaded",
+            "object with id",
+            "not found",
+            "could not find",
+            "no status found",
+        )
+    )
+
+
 def linkedin_metric_error_message(message: str) -> str:
     if "partnerapisocialmetadata" in message.lower():
         return (
@@ -250,12 +269,10 @@ def facebook_metric_message(status: str, errors: list[str]) -> str:
         return "Facebook post insights refreshed."
     if status == "partial":
         return "Facebook engagement counts refreshed from post edges."
-
-    combined_errors = " ".join(errors).lower()
-    if "unsupported get request" in combined_errors or "does not exist" in combined_errors:
+    if status == "missing":
         return (
-            "Facebook stats unavailable: Meta could not load this post ID. "
-            "It may be missing, deleted, not published to the page feed, or inaccessible to this page token."
+            "Facebook post is missing or inaccessible. It may have been deleted, not published "
+            "to the page feed, or hidden from this page token."
         )
     if any(error_means_unavailable_metric(error) for error in errors):
         return (
@@ -264,6 +281,13 @@ def facebook_metric_message(status: str, errors: list[str]) -> str:
         )
 
     return "No Facebook metrics returned."
+
+
+def missing_post_message(platform_label: str) -> str:
+    return (
+        f"{platform_label} post is missing or inaccessible. It may have been deleted "
+        "on the platform, or the connected account may not have permission to read it."
+    )
 
 
 async def fetch_instagram_metrics(post: dict[str, Any], remote_id: str) -> dict[str, Any]:
@@ -316,17 +340,22 @@ async def fetch_instagram_metrics(post: dict[str, Any], remote_id: str) -> dict[
         values["engagements"] = sum(value or 0 for value in engagement_parts)
 
     status = "available" if any(value is not None for value in values.values()) else "unavailable"
+    if status == "unavailable" and any(error_means_missing_post(error) for error in errors):
+        status = "missing"
     return platform_metric(
         "instagram",
         status,
         (
             "Instagram insights refreshed."
             if status == "available"
+            else missing_post_message("Instagram")
+            if status == "missing"
             else "; ".join(errors) or "No Instagram insights returned."
         ),
         remote_id,
         values,
         raw,
+        all_metric_keys() if status == "missing" else None,
     )
 
 
@@ -394,6 +423,9 @@ async def fetch_facebook_metrics(post: dict[str, Any], remote_id: str) -> dict[s
         for metric in ("impressions", "reach", "engagements", "clicks", "views")
     )
     status = "available" if has_insight_values else "partial" if any(value is not None for value in values.values()) else "unavailable"
+    if status == "unavailable" and any(error_means_missing_post(error) for error in errors):
+        status = "missing"
+        unavailable_metrics.update(all_metric_keys())
     return platform_metric(
         "facebook",
         status,
@@ -427,10 +459,11 @@ async def fetch_linkedin_metrics(post: dict[str, Any], remote_id: str) -> dict[s
             message = api_error_message(body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             message = str(error.reason)
+        status = "missing" if error_means_missing_post(message) else "unavailable"
         return platform_metric(
             "linkedin",
-            "unavailable",
-            linkedin_metric_error_message(message),
+            status,
+            missing_post_message("LinkedIn") if status == "missing" else linkedin_metric_error_message(message),
             remote_id,
             unavailable_metrics=all_metric_keys(),
         )
@@ -479,7 +512,14 @@ async def fetch_twitter_metrics(post: dict[str, Any], remote_id: str) -> dict[st
             message = api_error_message(body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             message = str(error.reason)
-        return platform_metric("twitter", "unavailable", message, remote_id)
+        status = "missing" if error_means_missing_post(message) else "unavailable"
+        return platform_metric(
+            "twitter",
+            status,
+            missing_post_message("X / Twitter") if status == "missing" else message,
+            remote_id,
+            unavailable_metrics=all_metric_keys() if status == "missing" else None,
+        )
     except (URLError, KeyError, TimeoutError) as error:
         return platform_metric("twitter", "unavailable", str(error), remote_id)
 
@@ -577,11 +617,14 @@ async def fetch_post_metrics(
         try:
             platform_metrics[platform] = await fetcher(post, result["remoteId"])
         except Exception as error:
+            message = str(error) or "Unknown analytics error."
+            status = "missing" if error_means_missing_post(message) else "unavailable"
             platform_metrics[platform] = platform_metric(
                 platform,
-                "unavailable",
-                str(error) or "Unknown analytics error.",
+                status,
+                missing_post_message(platform) if status == "missing" else message,
                 result.get("remoteId"),
+                unavailable_metrics=all_metric_keys() if status == "missing" else None,
             )
 
     return {
