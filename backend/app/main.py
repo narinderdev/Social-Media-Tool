@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import FRONTEND_ORIGIN
-from app.routes import auth, platforms, posts
+from app.routes import auth, linkedin, platforms, posts
 from app.scheduler import start_scheduler, stop_scheduler
 from app.storage import UPLOADS_DIR, ensure_storage
 
@@ -22,6 +22,7 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.include_router(auth.router)
+app.include_router(linkedin.router)
 app.include_router(platforms.router)
 app.include_router(posts.router)
 

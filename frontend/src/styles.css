@@ -1158,17 +1158,53 @@ time {
   background: #fffaf4;
 }
 
-.platform-stat-row > div:first-child {
+.platform-row-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
+}
+
+.platform-status-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px;
+  min-width: min(360px, 100%);
+}
+
+.platform-status-columns span {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid #eee4d6;
+  border-radius: 8px;
+  background: #fffdfa;
+}
+
+.platform-status-columns small {
+  color: #69737e;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .platform-stat-row strong {
   color: #26313b;
   font-size: 0.9rem;
+}
+
+.remote-status.available {
+  color: #126154;
+}
+
+.remote-status.missing {
+  color: #8b3f00;
+}
+
+.remote-status.unknown {
+  color: #69737e;
 }
 
 .platform-stat-row .platform-message {

@@ -42,18 +42,31 @@ const formatBytes = (bytes) => {
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-const statusLabels = {
-  missing: "Possibly deleted"
+const remoteStatusLabels = {
+  available: "Published",
+  missing: "Possibly deleted",
+  unknown: "Unknown"
 };
 
 const formatStatus = (status) =>
   status
-    ? statusLabels[status] ||
-      status
+    ? status
         .split("_")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ")
     : "Unknown";
+
+const remoteStatusForMetric = (metric) => {
+  if (!metric) {
+    return "unknown";
+  }
+  if (metric.remoteStatus) {
+    return metric.remoteStatus;
+  }
+  return metric.status === "missing" ? "missing" : "unknown";
+};
+
+const formatRemoteStatus = (status) => remoteStatusLabels[status] || formatStatus(status);
 
 const formatPlatformMessage = (message) => {
   if (!message) {
@@ -381,15 +394,28 @@ function PostStatsModal({ post, publishType, onClose }) {
                   <article className="platform-stat-row" key={result.platform}>
                     {(() => {
                       const metric = platformMetrics[result.platform];
+                      const remoteStatus = remoteStatusForMetric(metric);
+                      const statsStatus = metric?.status === "missing" ? "unavailable" : metric?.status || "unavailable";
 
                       return (
                         <>
-                          <div>
-                            <span className={`result-pill ${metric?.status || result.status}`}>
+                          <div className="platform-row-header">
+                            <span className={`result-pill ${result.status}`}>
                               <ResultIcon status={result.status} />
                               {platformStyles[result.platform]?.name || result.platform}
                             </span>
-                            <strong>{formatStatus(metric?.status || result.status)}</strong>
+                            <div className="platform-status-columns">
+                              <span>
+                                <small>Post</small>
+                                <strong className={`remote-status ${remoteStatus}`}>
+                                  {formatRemoteStatus(remoteStatus)}
+                                </strong>
+                              </span>
+                              <span>
+                                <small>Stats</small>
+                                <strong>{formatStatus(statsStatus)}</strong>
+                              </span>
+                            </div>
                           </div>
                           <div className="platform-metric-grid">
                             {metricLabels.map(([metricKey, label, description]) => (
@@ -475,13 +501,17 @@ function PostItem({ post }) {
         <div className="result-row">
           {results.map((result) => {
             const metric = platformMetrics[result.platform];
-            const analyticsStatus = metric?.status ? ` Stats: ${formatStatus(metric.status)}.` : "";
+            const statsStatus = metric?.status === "missing" ? "unavailable" : metric?.status;
+            const remoteStatus = remoteStatusForMetric(metric);
+            const postStatusText =
+              remoteStatus !== "unknown" ? ` Post: ${formatRemoteStatus(remoteStatus)}.` : "";
+            const analyticsStatus = statsStatus ? ` Stats: ${formatStatus(statsStatus)}.` : "";
 
             return (
               <span
                 className={`result-pill ${result.status}`}
                 key={result.platform}
-                title={`${result.message || ""}${analyticsStatus}`.trim()}
+                title={`${result.message || ""}${postStatusText}${analyticsStatus}`.trim()}
               >
                 <ResultIcon status={result.status} />
                 {platformStyles[result.platform]?.name || result.platform}

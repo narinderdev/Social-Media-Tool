@@ -29,6 +29,10 @@ SESSION_COOKIE_NAME = getenv("SESSION_COOKIE_NAME", "shared_posts_session")
 SOCIAL_DRY_RUN = bool_from_env(getenv("SOCIAL_DRY_RUN"), True)
 META_GRAPH_API_VERSION = getenv("META_GRAPH_API_VERSION", "v24.0")
 LINKEDIN_API_VERSION = getenv("LINKEDIN_API_VERSION", "202605")
+LINKEDIN_CLIENT_ID = getenv("LINKEDIN_CLIENT_ID", "")
+LINKEDIN_CLIENT_SECRET = getenv("LINKEDIN_CLIENT_SECRET", "")
+LINKEDIN_REDIRECT_URI = getenv("LINKEDIN_REDIRECT_URI", "")
+LINKEDIN_OAUTH_SCOPE = getenv("LINKEDIN_OAUTH_SCOPE", "openid profile w_member_social")
 
 
 def key_from_label(value: str) -> str:

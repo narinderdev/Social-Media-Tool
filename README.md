@@ -87,10 +87,10 @@ Credential notes:
 
 - Instagram and Facebook need Meta app/page/account credentials.
 - Instagram media publishing needs `PUBLIC_API_BASE_URL` to be a public HTTPS URL so Meta can fetch uploaded media.
-- LinkedIn needs an access token and author URN.
+- LinkedIn needs an access token and author URN. After setting `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, and `LINKEDIN_REDIRECT_URI`, open `/api/linkedin/connect` to start the OAuth flow.
 - X / Twitter needs app and user access credentials.
 - Published post analytics refresh automatically every 3 hours in the background and are saved in PostgreSQL under the `post_stats` table.
-- Opening a post stats modal starts a live 1-second refresh for the selected platforms until the modal is closed.
+- Opening a post stats modal allows a manual refresh; background refresh still runs every 3 hours.
 - Instagram/Facebook/X can return impressions, views, reach, engagement, reactions, comments, shares, clicks, saves, or bookmarks when the account token has the required platform permissions.
 - LinkedIn returns reactions and comments through social metadata with normal social-feed permissions; impressions and views require LinkedIn's restricted analytics access.
 

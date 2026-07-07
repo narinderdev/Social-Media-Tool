@@ -46,10 +46,12 @@ def platform_metric(
     values: dict[str, int | None] | None = None,
     raw: dict[str, Any] | None = None,
     unavailable_metrics: list[str] | None = None,
+    remote_status: str | None = None,
 ) -> dict[str, Any]:
     return {
         "platform": platform,
         "status": status,
+        "remoteStatus": remote_status or ("available" if status in {"available", "partial"} else "unknown"),
         "message": message,
         "remoteId": remote_id,
         "updatedAt": now_iso(),
@@ -264,12 +266,12 @@ def linkedin_metric_error_message(message: str) -> str:
     return message
 
 
-def facebook_metric_message(status: str, errors: list[str]) -> str:
+def facebook_metric_message(status: str, errors: list[str], remote_status: str = "unknown") -> str:
     if status == "available":
         return "Facebook post insights refreshed."
     if status == "partial":
         return "Facebook engagement counts refreshed from post edges."
-    if status == "missing":
+    if remote_status == "missing":
         return (
             "Facebook post is missing or inaccessible. It may have been deleted, not published "
             "to the page feed, or hidden from this page token."
@@ -340,8 +342,13 @@ async def fetch_instagram_metrics(post: dict[str, Any], remote_id: str) -> dict[
         values["engagements"] = sum(value or 0 for value in engagement_parts)
 
     status = "available" if any(value is not None for value in values.values()) else "unavailable"
-    if status == "unavailable" and any(error_means_missing_post(error) for error in errors):
-        status = "missing"
+    remote_status = (
+        "missing"
+        if status == "unavailable" and any(error_means_missing_post(error) for error in errors)
+        else "available"
+        if status == "available"
+        else "unknown"
+    )
     return platform_metric(
         "instagram",
         status,
@@ -349,13 +356,14 @@ async def fetch_instagram_metrics(post: dict[str, Any], remote_id: str) -> dict[
             "Instagram insights refreshed."
             if status == "available"
             else missing_post_message("Instagram")
-            if status == "missing"
+            if remote_status == "missing"
             else "; ".join(errors) or "No Instagram insights returned."
         ),
         remote_id,
         values,
         raw,
-        all_metric_keys() if status == "missing" else None,
+        all_metric_keys() if remote_status == "missing" else None,
+        remote_status,
     )
 
 
@@ -423,17 +431,19 @@ async def fetch_facebook_metrics(post: dict[str, Any], remote_id: str) -> dict[s
         for metric in ("impressions", "reach", "engagements", "clicks", "views")
     )
     status = "available" if has_insight_values else "partial" if any(value is not None for value in values.values()) else "unavailable"
+    remote_status = "available" if status in {"available", "partial"} else "unknown"
     if status == "unavailable" and any(error_means_missing_post(error) for error in errors):
-        status = "missing"
+        remote_status = "missing"
         unavailable_metrics.update(all_metric_keys())
     return platform_metric(
         "facebook",
         status,
-        facebook_metric_message(status, errors),
+        facebook_metric_message(status, errors, remote_status),
         post_id,
         values,
         raw,
         sorted(unavailable_metrics),
+        remote_status,
     )
 
 
@@ -459,13 +469,16 @@ async def fetch_linkedin_metrics(post: dict[str, Any], remote_id: str) -> dict[s
             message = api_error_message(body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             message = str(error.reason)
-        status = "missing" if error_means_missing_post(message) else "unavailable"
+        remote_status = "missing" if error_means_missing_post(message) else "unknown"
         return platform_metric(
             "linkedin",
-            status,
-            missing_post_message("LinkedIn") if status == "missing" else linkedin_metric_error_message(message),
+            "unavailable",
+            missing_post_message("LinkedIn")
+            if remote_status == "missing"
+            else linkedin_metric_error_message(message),
             remote_id,
             unavailable_metrics=all_metric_keys(),
+            remote_status=remote_status,
         )
     except (URLError, KeyError, TimeoutError) as error:
         return platform_metric(
@@ -512,13 +525,14 @@ async def fetch_twitter_metrics(post: dict[str, Any], remote_id: str) -> dict[st
             message = api_error_message(body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             message = str(error.reason)
-        status = "missing" if error_means_missing_post(message) else "unavailable"
+        remote_status = "missing" if error_means_missing_post(message) else "unknown"
         return platform_metric(
             "twitter",
-            status,
-            missing_post_message("X / Twitter") if status == "missing" else message,
+            "unavailable",
+            missing_post_message("X / Twitter") if remote_status == "missing" else message,
             remote_id,
-            unavailable_metrics=all_metric_keys() if status == "missing" else None,
+            unavailable_metrics=all_metric_keys() if remote_status == "missing" else None,
+            remote_status=remote_status,
         )
     except (URLError, KeyError, TimeoutError) as error:
         return platform_metric("twitter", "unavailable", str(error), remote_id)
@@ -618,13 +632,14 @@ async def fetch_post_metrics(
             platform_metrics[platform] = await fetcher(post, result["remoteId"])
         except Exception as error:
             message = str(error) or "Unknown analytics error."
-            status = "missing" if error_means_missing_post(message) else "unavailable"
+            remote_status = "missing" if error_means_missing_post(message) else "unknown"
             platform_metrics[platform] = platform_metric(
                 platform,
-                status,
-                missing_post_message(platform) if status == "missing" else message,
+                "unavailable",
+                missing_post_message(platform) if remote_status == "missing" else message,
                 result.get("remoteId"),
-                unavailable_metrics=all_metric_keys() if status == "missing" else None,
+                unavailable_metrics=all_metric_keys() if remote_status == "missing" else None,
+                remote_status=remote_status,
             )
 
     return {
